@@ -1,6 +1,6 @@
 import {
   SAVE_KEY, VERSION, LAYERS, ZONES, ORE_ORDER, MINING_TOOLS, COMBAT_WEAPONS,
-  GEAR_SLOTS, MAX_INVENTORY, sanitizeLootItem,
+  GEAR_SLOTS, MAX_INVENTORY, sanitizeLootItem, CREW_POOL, TASKS,
   makeEnemy, playerStats, drillRate, salvageCapsRate, layerMaxHp, fmt,
 } from './data.js';
 
@@ -30,6 +30,11 @@ export function defaultState() {
     equippedWeapon: 'pipeaxe',
     inventory: [],
     loadout: { weapon: null, tool: null, armor: null, helm: null, charm: null },
+    crew: {},
+    tower: { floor: 1, best: 0, active: false },
+    iso: 0,
+    tasks: {},
+    store: { stock: [] },
     combat: {
       zone: 0,
       unlocked: 1,
@@ -111,6 +116,30 @@ function mergeState(raw) {
     }
   }
 
+  // crew: booleans for valid crew ids only
+  base.crew = {};
+  for (const member of CREW_POOL) {
+    if (raw.crew?.[member.id] === true) base.crew[member.id] = true;
+  }
+  base.tower = {
+    floor: Math.min(999, Math.max(1, Math.floor(Number(raw.tower?.floor) || 1))),
+    best: Math.min(999, Math.max(0, Math.floor(Number(raw.tower?.best) || 0))),
+    active: false,
+  };
+  base.iso = Math.max(0, Math.floor(Number(raw.iso) || 0));
+  base.tasks = {};
+  for (const task of TASKS) {
+    if (raw.tasks?.[task.id] === true) base.tasks[task.id] = true;
+  }
+  base.store = { stock: [] };
+  if (Array.isArray(raw.store?.stock)) {
+    for (const entry of raw.store.stock) {
+      if (base.store.stock.length >= 4) break;
+      const item = sanitizeLootItem(entry);
+      if (item) base.store.stock.push(item);
+    }
+  }
+
   base.layersUnlocked = Math.min(LAYERS.length, Math.max(1, Math.floor(Number(raw.layersUnlocked) || 1)));
   base.layer = Math.min(base.layersUnlocked - 1, Math.max(0, Math.floor(Number(raw.layer) || 0)));
   if (Array.isArray(raw.drills)) base.drills = base.drills.map((_, i) => Math.max(0, Math.floor(Number(raw.drills[i]) || 0)));
@@ -142,6 +171,8 @@ function mergeState(raw) {
   base.stats.clicks = Math.max(0, Math.floor(Number(base.stats.clicks) || 0));
   base.stats.kills = Math.max(0, Math.floor(Number(base.stats.kills) || 0));
   base.stats.deaths = Math.max(0, Math.floor(Number(base.stats.deaths) || 0));
+  base.stats.bossKills = Math.max(0, Math.floor(Number(base.stats.bossKills) || 0));
+  base.stats.legendaryFound = Math.max(0, Math.floor(Number(base.stats.legendaryFound) || 0));
   base.stats.detonations = Math.max(0, Math.floor(Number(base.stats.detonations) || 0));
   base.autoMine = raw.autoMine === true;
   base.sound = raw.sound !== false;
@@ -216,6 +247,13 @@ export function resetProgress(state) {
   fresh.attributes = { ...state.attributes };
   fresh.perks = { ...state.perks };
   fresh.outfits = { ...state.outfits };
+  // Crewed survivors, isotopes, contracts, the store stall and the tower's
+  // best floor are part of the survivor, not the run.
+  fresh.crew = { ...state.crew };
+  fresh.tower = { floor: 1, best: Math.max(0, state.tower?.best || 0), active: false };
+  fresh.iso = state.iso || 0;
+  fresh.tasks = { ...state.tasks };
+  fresh.store = { stock: (state.store?.stock || []).map((item) => ({ ...item, stats: { ...item.stats } })) };
   // Schematics are knowledge, not hardware: unlocked tools and weapons survive.
   fresh.tools = { ...state.tools };
   fresh.weapons = { ...state.weapons };
