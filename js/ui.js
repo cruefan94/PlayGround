@@ -2,6 +2,7 @@ import {
   ORES, ORE_ORDER, LAYERS, ZONES, STIM_MAX, OUTFITS, ATTRIBUTES, PERKS,
   MINING_TOOLS, COMBAT_WEAPONS, COMBAT_WEAPON_MAP, GEAR_SLOTS, MAX_INVENTORY,
   CHESTS, CREW_POOL, CREW_CLASSES, CREW_CLASS_MAP, CREW_COUNT, crewCount, crewBonus,
+  CLASS_RANK_MAP, classTierRank, tierLabel,
   TASKS, taskProgress, isoValue, STORE_REROLL_COST,
   towerUnlock, towerReward,
   fmt, fmtRate, costLabel, canAfford, pickPower, pickaxeCost,
@@ -1014,11 +1015,12 @@ export class UI {
     const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
     const rarity = rarityOf(item);
     const equipped = this.s.loadout?.[item.slot] === item.id;
+    const tier = item.classId ? tierLabel(item.classId) : '';
     return `
       <div class="loot-card rarity-${rarity.id}${equipped ? ' equipped' : ''}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
         <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
         <strong class="lc-name">${item.name}</strong>
-        <span class="lc-slot">${slot.name}</span>
+        <span class="lc-slot">${slot.name}${tier ? `<i class="lc-tier rank-${classTierRank(item)}">${tier}</i>` : ''}</span>
         <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
         <div class="lc-actions">
           <button class="mini-btn" type="button" data-action="${equipped ? 'unequip' : 'equiploot'}" data-id="${item.id}" data-slot="${item.slot}">${equipped ? 'REMOVE' : 'EQUIP'}</button>
@@ -1076,6 +1078,8 @@ export class UI {
   offerCard(item, index) {
     const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
     const rarity = rarityOf(item);
+    const tier = item.classId ? tierLabel(item.classId) : '';
+    const rank = classTierRank(item);
     const classLabel = item.classId
       ? (COMBAT_WEAPON_MAP[item.classId]?.name || item.classId.toUpperCase())
       : '';
@@ -1084,10 +1088,10 @@ export class UI {
       <div class="loot-card offer-card rarity-${rarity.id}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
         <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
         <strong class="lc-name">${item.name}</strong>
-        <span class="lc-slot">${slot.name}${classLabel ? ` · ${classLabel}` : ''}</span>
+        <span class="lc-slot">${slot.name}${classLabel ? ` · ${classLabel}` : ''}${tier ? `<i class="lc-tier rank-${rank}">${tier}</i>` : ''}</span>
         <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
         <div class="offer-foot">
-          <span class="offer-price">${fmt(price)} ISO</span>
+          <span class="offer-price">CLASS ${rank + 1} · ${fmt(price)} ISO</span>
           <button class="btn small primary" type="button" data-action="storeoffer" data-index="${index}" data-oafford>BUY</button>
         </div>
       </div>`;
@@ -1139,7 +1143,7 @@ export class UI {
       const afford = iso >= price;
       els.card.classList.toggle('affordable', afford);
       if (els.buy) els.buy.disabled = !afford;
-      if (els.price) setText(els.price, `${fmt(price)} ISO`);
+      if (els.price) setText(els.price, `CLASS ${classTierRank(item) + 1} · ${fmt(price)} ISO`);
     });
     setText(r.storeStockNote, stock.length ? 'TOP-TIER · ISO ONLY' : 'STALL BARE');
     if (r.storeRollBtn) {
