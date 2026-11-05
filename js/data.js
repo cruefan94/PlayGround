@@ -191,6 +191,105 @@ export const UNIT_TYPES = {
 
 export const PLAYER_ORDER = ['alpha', 'bravo', 'delta', 'patton', 'acav', 'bunker']
 
+// ---------------------------------------------------------------------------
+// Per-character movement signatures. Every friendly unit marks its reachable
+// hexes in its own colour and edge style, so mixed formations stay legible.
+// ---------------------------------------------------------------------------
+
+export const MOVE_STYLES = {
+  alpha:  { rgb: '159,205,144', fill: .13, edge: 'rgba(186,226,164,.42)',  lw: 1,   dash: null },          // rifle: classic issue green
+  bravo:  { rgb: '226,181,111', fill: .12, edge: 'rgba(236,200,138,.45)',  lw: 1.1, dash: [2, 3] },        // MG: short leg, dotted edge
+  delta:  { rgb: '214,138,95',  fill: .13, edge: 'rgba(232,158,112,.45)',  lw: 1,   dash: [8, 3] },        // M79: burnt orange
+  patton: { rgb: '122,167,201', fill: .14, edge: 'rgba(148,190,222,.5)',   lw: 1.8, dash: null },          // armour: solid steel-blue
+  acav:   { rgb: '99,184,169',  fill: .13, edge: 'rgba(128,214,198,.5)',   lw: 1,   dash: [10, 5] }        // ACAV: fast, double dash
+}
+
+// ---------------------------------------------------------------------------
+// Loadout customisation. Every choice stays in 1968 use with US / ARVN forces.
+// Each weapon option trades firepower, reach and mobility; the utility slot
+// carries one support item. Changing loadout updates stats, portrait art and
+// the weapon line on the unit card instantly.
+// ---------------------------------------------------------------------------
+
+export const LOADOUTS = {
+  alpha: {
+    label: 'ALPHA',
+    weapons: [
+      { id: 'm16', name: 'M16A1', weapon: 'M16A1 · 5.56mm', icon: 'rifle', soft: 6, armorAtk: 2, range: 1, move: 2,
+        desc: 'Standard issue rifle squad. Handy and dependable.' },
+      { id: 'm14', name: 'M14', weapon: 'M14 · 7.62mm', icon: 'rifle', soft: 7, armorAtk: 3, range: 1, move: 1,
+        desc: 'Older heavy battle rifle. Hits harder on the way in, slower to carry.' },
+      { id: 'xm177', name: 'XM177E2', weapon: 'XM177E2 · 5.56mm', icon: 'rifle', soft: 5, armorAtk: 1, range: 1, move: 3,
+        desc: 'Short carbine of special Forces teams. Light and quick.' }
+    ],
+    utilities: [
+      { id: 'smoke', name: 'M18 Smoke', desc: 'Cover on call. +1 cover while holding ground.' },
+      { id: 'law', name: 'M72 LAW', desc: 'Shoulder-fired AP rocket. +4 damage vs armour.' },
+      { id: 'frag', name: 'M26 Frags', desc: 'Hand grenades. Attacks splash onto adjacent hexes.' }
+    ]
+  },
+  bravo: {
+    label: 'BRAVO',
+    weapons: [
+      { id: 'm60', name: 'M60 GPMG', weapon: 'M60 · 7.62mm', icon: 'mg', soft: 5, armorAtk: 2, range: 2, move: 1,
+        desc: 'Belt-fed general purpose MG. Pins whatever it hits.' },
+      { id: 'm2', name: 'M2 .50cal', weapon: 'M2HB · .50 cal', icon: 'mg', soft: 6, armorAtk: 5, range: 2, move: 1,
+        desc: 'Tripod-mounted heavy machine gun. Punishes soft targets.' },
+      { id: 'rpd', name: 'RPD (captured)', weapon: 'RPD · 7.62mm (capt)', icon: 'mg', soft: 4, armorAtk: 1, range: 2, move: 2,
+        desc: 'Ethnic-origin support weapon. Trade firepower for mobility.' }
+    ],
+    utilities: [
+      { id: 'smoke', name: 'M18 Smoke', desc: 'Cover on call. +1 cover while holding ground.' },
+      { id: 'law', name: 'M72 LAW', desc: 'Shoulder-fired AP rocket. +4 damage vs armour.' },
+      { id: 'frag', name: 'M26 Frags', desc: 'Hand grenades. Attacks splash onto adjacent hexes.' }
+    ]
+  },
+  delta: {
+    label: 'DELTA',
+    weapons: [
+      { id: 'm79', name: 'M79', weapon: 'M79 · 40mm', icon: 'm79', soft: 7, armorAtk: 3, range: 2, move: 2, splash: 1,
+        desc: 'Classic blooper gun. Splash punishes enemy clusters.' },
+      { id: 'xm148', name: 'XM148', weapon: 'XM148 · 40mm under M16A1', icon: 'm79', soft: 6, armorAtk: 3, range: 2, move: 3, splash: 1,
+        desc: 'Grenade launcher under the rifle. Attach mobility to punches.' },
+      { id: 'canister', name: 'M79 Canister', weapon: 'M79 · canister', icon: 'm79', soft: 9, armorAtk: 3, range: 1, move: 2,
+        desc: 'Beehive-type close shot. Devastating at point-blank.' }
+    ],
+    utilities: [
+      { id: 'smoke', name: 'M18 Smoke', desc: 'Cover on call. +1 cover while holding ground.' },
+      { id: 'law', name: 'M72 LAW', desc: 'Shoulder-fired AP rocket. +4 damage vs armour.' },
+      { id: 'frag', name: 'M26 Frags', desc: 'Hand grenades. Attacks splash onto adjacent hexes.' }
+    ]
+  },
+  patton: {
+    label: 'IRONHIDE',
+    weapons: [
+      { id: 'he', name: '90mm HE', weapon: '90mm M41 · HE', icon: 'tank', soft: 7, armorAtk: 10, range: 2, move: 3,
+        desc: 'High-explosive loadout. Blend of anti-personnel and anti-armour.' },
+      { id: 'ap', name: '90mm AP', weapon: '90mm M41 · AP', icon: 'tank', soft: 5, armorAtk: 12, range: 2, move: 3,
+        desc: 'Solid shot. Everything into hunting PT-76s.' },
+      { id: 'beehive', name: '90mm Beehive', weapon: '90mm · beehive', icon: 'tank', soft: 10, armorAtk: 4, range: 2, move: 3,
+        desc: 'Flechette shot against exposed infantry.' }
+    ],
+    utilities: [
+      { id: 'smoke', name: 'Smoke shells', desc: 'Cover on call. +1 cover while holding ground.' },
+      { id: 'searchlight', name: 'Xenon searchlight', desc: 'Night light. Attacks pin targets.' }
+    ]
+  },
+  acav: {
+    label: 'TRACKER',
+    weapons: [
+      { id: 'twin60', name: 'Twin M60', weapon: 'M113 ACAV · twin M60', icon: 'apc', soft: 6, armorAtk: 4, range: 2, move: 4,
+        desc: 'ACAV ring mounts. Fast flanker with MG support.' },
+      { id: 'm2', name: 'M2 .50cal', weapon: 'M113 ACAV · M2 .50', icon: 'apc', soft: 7, armorAtk: 6, range: 2, move: 3,
+        desc: 'Heavy ring mount. Trades speed for punching power.' }
+    ],
+    utilities: [
+      { id: 'smoke', name: 'Smoke grenades', desc: 'Cover on call. +1 cover while holding ground.' }
+    ]
+  }
+}
+
+
 export const STARTING_UNITS = [
   { type: 'bunker', c: 2, r: 4 },
   { type: 'alpha', c: 3, r: 4 },
