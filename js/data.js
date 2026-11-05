@@ -296,13 +296,34 @@ export function gearStatLines(item) {
 
 export function scrapValue(item) {
   const rarity = rarityOf(item);
-  return Math.ceil(8 + (item?.level || 1) * 2.5 + rarity.rank * 14);
+  return Math.ceil((8 + (item?.level || 1) * 2.5 + rarity.rank * 14) * (item?.unique ? 3 : 1));
 }
 
 export function lootRunCost(state) {
   const level = Math.max(1, state?.level || 1);
   const zones = Math.max(1, state?.combat?.unlocked || 1);
   return Math.ceil(35 + level * 10 + (zones - 1) * 40);
+}
+
+export const TOWER_UNIQUES = {
+  weapon: [
+    { name: 'Dustbreaker', classId: 'shotgun' },
+    { name: "Warden's Fang", classId: 'rifle' },
+    { name: 'Vaultpiercer', classId: 'railgun' },
+    { name: 'Rusthowl', classId: 'cleaver' },
+    { name: 'Requiem Needle', classId: 'reaver' },
+  ],
+  armor: [
+    { name: 'Gamma Carapace', classId: null },
+    { name: 'The Last Duster', classId: null },
+    { name: 'Bulwark of Ash', classId: null },
+  ],
+};
+
+function pickUnique(slotId, rarityRank) {
+  const pool = TOWER_UNIQUES[slotId] || TOWER_UNIQUES.weapon;
+  const roll = pool[Math.floor(Math.random() * pool.length)];
+  return { baseName: roll.name, classId: roll.classId };
 }
 
 function rollRarity(state, boss = false) {
@@ -329,10 +350,24 @@ function pickSlot() {
 }
 
 export function makeLootItem(state, opts = {}) {
-  const slotId = opts.slot || pickSlot();
+  const unique = opts.unique === true;
+  let slotId;
+  if (unique) {
+    slotId = Math.random() < 0.55 ? 'weapon' : 'armor';
+  } else {
+    slotId = opts.slot || pickSlot();
+  }
   const slot = GEAR_SLOT_MAP[slotId];
   if (!slot) return null;
-  const rarity = opts.rarity ? (RARITY_MAP[opts.rarity] || RARITIES[0]) : rollRarity(state, !!opts.boss);
+  let rarity;
+  if (opts.rarity) {
+    rarity = RARITY_MAP[opts.rarity] || RARITIES[0];
+  } else if (unique) {
+    const roll = Math.random() * 100;
+    rarity = roll < 32 ? RARITIES[4] : roll < 88 ? RARITIES[3] : RARITIES[2];
+  } else {
+    rarity = rollRarity(state, !!opts.boss);
+  }
   const level = Math.max(1, Math.floor(
     (state?.level || 1) * 0.8
     + (state?.combat?.unlocked || 1) * 2
@@ -342,7 +377,9 @@ export function makeLootItem(state, opts = {}) {
 
   let classId = null;
   let baseName;
-  if (slotId === 'weapon') {
+  if (unique) {
+    ({ baseName, classId } = pickUnique(slotId, rarity.rank));
+  } else if (slotId === 'weapon') {
     const weapon = COMBAT_WEAPONS[Math.floor(Math.random() * COMBAT_WEAPONS.length)];
     classId = weapon.id;
     baseName = weapon.name;
@@ -355,8 +392,8 @@ export function makeLootItem(state, opts = {}) {
     baseName = names[Math.min(names.length - 1, rarity.rank)];
   }
 
-  const pool = [...LOOT_AFFIXES[slotId]].sort(() => Math.random() - 0.5).slice(0, rarity.affixes);
-  const scale = (0.75 + Math.min(60, level) * 0.035) * (1 + rarity.rank * 0.12);
+  const pool = [...LOOT_AFFIXES[slotId]].sort(() => Math.random() - 0.5).slice(0, Math.max(rarity.affixes, unique ? 4 : 0));
+  const scale = (0.75 + Math.min(60, level) * 0.035) * (1 + rarity.rank * 0.12) * (unique ? 1.45 : 1);
   const stats = {};
   for (const affix of pool) {
     const base = affix.min + Math.random() * (affix.max - affix.min);
@@ -368,10 +405,11 @@ export function makeLootItem(state, opts = {}) {
     id: `loot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     slot: slotId,
     rarity: rarity.id,
-    name: `${rarity.prefix} ${baseName}`,
+    name: unique ? baseName : `${rarity.prefix} ${baseName}`,
     level,
     classId,
     stats,
+    ...(unique ? { unique: true } : {}),
   };
 }
 
@@ -398,6 +436,7 @@ export function sanitizeLootItem(raw) {
     level: Math.max(1, Math.floor(Number(raw.level) || 1)),
     classId,
     stats,
+    unique: raw.unique === true || TOWER_UNIQUES[slot.id]?.some((u) => u.name === raw.name) || undefined,
   };
 }
 
@@ -459,6 +498,197 @@ export function perkSpeedMult(state) { return 1 + perkRank(state, 'quickhands') 
 export function perkHealBonus(state) { return perkRank(state, 'fieldmedic') * 5; }
 export function perkXpMult(state) { return 1 + perkRank(state, 'deeplung') * 0.08; }
 
+/* ── crew & chests ────────────────────────────────────────── */
+/* Crew members are recruited from chests and are permanent.
+   Classes 1–5: Common → True Survivor. Each member carries their own stat buff
+   and every buff stacks with all other recruited crew. */
+export const CREW_CLASSES = [
+  { cls: 1, name: 'COMMON', color: '#9aa8b2', refund: 60 },
+  { cls: 2, name: 'UNCOMMON', color: '#7fdc6a', refund: 450 },
+  { cls: 3, name: 'RARE', color: '#6fa8ff', refund: 2400 },
+  { cls: 4, name: 'EPIC', color: '#c58bff', refund: 13000 },
+  { cls: 5, name: 'TRUE SURVIVOR', color: '#ffb15c', refund: 68000 },
+];
+export const CREW_CLASS_MAP = Object.fromEntries(CREW_CLASSES.map((c) => [c.cls, c]));
+
+export const CREW_POOL = [
+  /* class 1 — common */
+  { id: 'ratpick', name: 'Rustpicker Rat', cls: 1, blurb: 'Chews through seam-edge scrap.', stats: { ore: 0.03 }, buff: 'ORE +3%' },
+  { id: 'bunker', name: 'Bunker Rat', cls: 1, blurb: 'Sleeps in the drill housing.', stats: { hp: 10 }, buff: 'HP +10' },
+  { id: 'whistler', name: 'Tin Whistler', cls: 1, blurb: 'Signal codes nobody can read.', stats: { atk: 0.02 }, buff: 'ATK +2%' },
+  { id: 'filter', name: 'Filter Kid', cls: 1, blurb: 'First to spot the weak seam.', stats: { crit: 0.01 }, buff: 'CRIT +1%' },
+  { id: 'bolt', name: 'Bolt Bearer', cls: 1, blurb: 'Carries the good bolts. Uses them.', stats: { power: 0.02 }, buff: 'VEIN POWER +2%' },
+  { id: 'dust', name: 'Dust Scavenger', cls: 1, blurb: 'Trades caps from other rigs.', stats: { caps: 0.02 }, buff: 'CAPS +2%' },
+  /* class 2 — uncommon */
+  { id: 'slagwalker', name: 'Slagwalker', cls: 2, blurb: 'Crosses toxic runoff in boots of slag.', stats: { def: 0.02 }, buff: 'DEF +2%' },
+  { id: 'canteen', name: 'Canteen Bearer', cls: 2, blurb: 'Stims, salts and cold water, on time.', stats: { heal: 3 }, buff: 'HEAL +3 PER KILL' },
+  { id: 'mock', name: 'Mock Militia', cls: 2, blurb: 'Drills badly, shoots surprisingly well.', stats: { atk: 0.035, hp: 10 }, buff: 'ATK +3.5% · HP +10' },
+  { id: 'sunlens', name: 'Sunlens Scout', cls: 2, blurb: 'Ground glass optics. Nothing escapes.', stats: { crit: 0.015 }, buff: 'CRIT +1.5%' },
+  { id: 'hookhand', name: 'Hookhand', cls: 2, blurb: 'Lost a hand. Kept the hook and the hustle.', stats: { ore: 0.04 }, buff: 'ORE +4%' },
+  /* class 3 — rare */
+  { id: 'forgechild', name: 'Forge Child', cls: 3, blurb: 'Raised in the foundry. Dreams in copper.', stats: { power: 0.05, yield: 0.05 }, buff: 'VEIN +5% · YIELD +5%' },
+  { id: 'saint', name: 'Saint of Dust', cls: 3, blurb: 'Blessed the waste take everything but you.', stats: { hp: 60, def: 0.02 }, buff: 'HP +60 · DEF +2%' },
+  { id: 'kiteer', name: 'Kite Flier', cls: 3, blurb: 'Counts the tower-glass and skyscrapers of experience.', stats: { xp: 0.12 }, buff: 'XP +12%' },
+  { id: 'greaser', name: 'Greaser Gang', cls: 3, blurb: 'Four hands, one wrench, zero overtime.', stats: { speed: 0.04 }, buff: 'SPEED +4%' },
+  { id: 'coinwise', name: 'Coinwise Broker', cls: 3, blurb: 'Caps multiply when they touch her ledger.', stats: { caps: 0.08 }, buff: 'CAPS +8%' },
+  /* class 4 — epic */
+  { id: 'molten', name: 'Molten Pact', cls: 4, blurb: 'Reactor-warm blood, literally.', stats: { atk: 0.09, crit: 0.02 }, buff: 'ATK +9% · CRIT +2%' },
+  { id: 'titan', name: 'Titan Herder', cls: 4, blurb: 'Walks drill rigs like plough oxen.', stats: { ore: 0.10, power: 0.06 }, buff: 'ORE +10% · VEIN +6%' },
+  { id: 'physician', name: 'Warden Physician', cls: 4, blurb: 'Field surgery from a dead civilization.', stats: { heal: 8, def: 0.04 }, buff: 'HEAL +8/KILL · DEF +4%' },
+  { id: 'ledger', name: 'Wasteland Ledger', cls: 4, blurb: 'Every trade, every debt, every skull.', stats: { caps: 0.12, ore: 0.06 }, buff: 'CAPS +12% · ORE +6%' },
+  /* class 5 — true survivors */
+  { id: 'hollow', name: 'Hollowwalker', cls: 5, blurb: 'Walked out of the vault the wrong way.', stats: { atk: 0.15, crit: 0.04, def: 0.05 }, buff: 'ATK +15% · CRIT +4% · DEF +5%' },
+  { id: 'resonant', name: 'The Resonant', cls: 5, blurb: 'Hears ore singing under every rock.', stats: { ore: 0.18, xp: 0.20 }, buff: 'ORE +18% · XP +20%' },
+  { id: 'goldblood', name: 'Goldblood', cls: 5, blurb: 'Caps run in the family. In the veins.', stats: { hp: 150, caps: 0.18 }, buff: 'HP +150 · CAPS +18%' },
+];
+export const CREW_COUNT = CREW_POOL.length;
+
+export function crewCount(state) {
+  let n = 0;
+  for (const member of CREW_POOL) if (state?.crew?.[member.id]) n += 1;
+  return n;
+}
+
+/* Aggregated crew buffs. Recruited members are all active at once. */
+export function crewBonus(state) {
+  const agg = { ore: 0, caps: 0, atk: 0, hp: 0, crit: 0, def: 0, xp: 0, speed: 0, power: 0, yield: 0, heal: 0 };
+  if (!state?.crew) return agg;
+  for (const member of CREW_POOL) {
+    if (!state.crew[member.id]) continue;
+    for (const [key, value] of Object.entries(member.stats)) {
+      agg[key] = (agg[key] || 0) + Number(value);
+    }
+  }
+  return agg;
+}
+
+/* Supply chests. Each tier guarantees its class floor; costs are caps (coins). */
+export const CHESTS = [
+  {
+    id: 'common', name: 'Common Cache', tier: 'CLASS 1+ CHEST', color: '#9aa8b2', icon: '▣',
+    cost: 1, req: 1, weights: { 1: 86, 2: 14 },
+    blurb: 'Assorted locker from a dead supply line.', odds: 'Class 1 crew · small Class 2 chance',
+  },
+  {
+    id: 'uncommon', name: 'Uncommon Crate', tier: 'CLASS 2+ CHEST', color: '#7fdc6a', icon: '▭',
+    cost: 2, req: 4, weights: { 1: 30, 2: 56, 3: 14 },
+    blurb: 'Sealed workbox from a slag crew.', odds: 'Class 2 guaranteed · Class 1/3 possible',
+  },
+  {
+    id: 'rare', name: 'Rare Locker', tier: 'CLASS 3+ CHEST', color: '#6fa8ff', icon: '◫',
+    cost: 5, req: 8, weights: { 2: 30, 3: 56, 4: 14 },
+    blurb: 'A carabiner-sealed officer locker.', odds: 'Class 3 guaranteed · Class 2/4 possible',
+  },
+  {
+    id: 'epic', name: 'Epic Vault', tier: 'CLASS 4+ CHEST', color: '#c58bff', icon: '◈',
+    cost: 12, req: 13, weights: { 3: 34, 4: 56, 5: 10 },
+    blurb: 'Reactor-sealed crew container.', odds: 'Class 4 guaranteed · Class 3/5 possible',
+  },
+  {
+    id: 'ultra', name: 'Ultra Reliquary', tier: 'ULTRA RARE', color: '#ffb15c', icon: '✦', ultra: true,
+    cost: 30, req: 18, weights: { 4: 42, 5: 58 },
+    blurb: 'Black-vault reliquary. It hums when opened.', odds: '58% Class 5 · else Class 4',
+  },
+];
+export const CHEST_MAP = Object.fromEntries(CHESTS.map((c) => [c.id, c]));
+
+/* ── store ────────────────────────────────────────────────── */
+/* Premium black market. Everything here is priced in isotopes —
+   the glowing green currency earned from 10-round bosses, tower
+   milestones and contracts. Coins never work in here. */
+export const STORE_REROLL_COST = 3;
+export const STORE_STOCK_SIZE = 3;
+
+/* Isotope price of a gear offer. Uniques read as premium. */
+export function isoValue(item) {
+  const rarity = rarityOf(item);
+  const base = 2 + rarity.rank * 2.5 + (item?.level || 1) * 0.12;
+  return Math.max(1, Math.ceil(base * (item?.unique ? 2.2 : 1)));
+}
+
+/* ── contracts (one-time isotope bounties) ────────────────── */
+export const TASKS = [
+  { id: 'first_boss', name: 'First Blood', desc: 'Defeat any zone boss.', metric: 'bossKills', goal: 1, iso: 1 },
+  { id: 'boss_hunter', name: 'Boss Hunter', desc: 'Defeat 10 zone bosses.', metric: 'bossKills', goal: 10, iso: 2 },
+  { id: 'kill_100', name: 'Courier of Lead', desc: 'Defeat 100 hostiles.', metric: 'kills', goal: 100, iso: 2 },
+  { id: 'kill_500', name: 'Execution Document', desc: 'Defeat 500 hostiles.', metric: 'kills', goal: 500, iso: 4 },
+  { id: 'tower_5', name: 'Tower Initiate', desc: 'Reach Ascent Tower floor 5.', metric: 'towerBest', goal: 5, iso: 2 },
+  { id: 'tower_10', name: 'Warden Breaker', desc: 'Reach Ascent Tower floor 10.', metric: 'towerBest', goal: 10, iso: 3 },
+  { id: 'tower_20', name: 'Sky Stealer', desc: 'Reach Ascent Tower floor 20.', metric: 'towerBest', goal: 20, iso: 5 },
+  { id: 'crew_5', name: 'Small Convoy', desc: 'Recruit 5 crew members.', metric: 'crew', goal: 5, iso: 2 },
+  { id: 'crew_15', name: 'Full Convoy', desc: 'Recruit 15 crew members.', metric: 'crew', goal: 15, iso: 5 },
+  { id: 'level_15', name: 'Hardened Survivor', desc: 'Reach survivor level 15.', metric: 'level', goal: 15, iso: 3 },
+  { id: 'legend_1', name: 'Vault Touch', desc: 'Recover a legendary or unique item.', metric: 'legendary', goal: 1, iso: 2 },
+  { id: 'legend_5', name: 'Relic Broker', desc: 'Recover 5 legendary or unique items.', metric: 'legendary', goal: 5, iso: 4 },
+];
+export const TASK_MAP = Object.fromEntries(TASKS.map((t) => [t.id, t]));
+
+export function taskProgress(state) {
+  const stats = state?.stats || {};
+  return {
+    bossKills: stats.bossKills || 0,
+    kills: stats.kills || 0,
+    towerBest: state?.tower?.best || 0,
+    crew: crewCount(state),
+    level: state?.level || 1,
+    legendary: stats.legendaryFound || 0,
+  };
+}
+
+/* ── combat tower ─────────────────────────────────────────── */
+/* C endless ascent: one hostile per floor, difficulty and rewards rise
+   every floor. Boss floors every 5. Dying ends the run; the best floor sticks. */
+export const TOWER_NAMES = ['Tower Rat', 'Ascent Husk', 'Floor Warden', 'Flux Crawler', 'Stair Troll', 'Null Sentinel'];
+export const TOWER_BOSS_NAMES = ['FLOOR KEEPER', 'STAIR TYRANT', 'ASCENT WARDEN'];
+
+export function towerUnlock(state) {
+  return (state?.level || 1) >= 5 || (state?.combat?.unlocked || 1) >= 2;
+}
+
+export function towerReward(floor) {
+  const f = Math.max(1, floor);
+  return {
+    caps: Math.ceil((16 + 6 * f) * Math.pow(1.11, f - 1) * (f % 5 === 0 ? 2 : 1)),
+    ore: ORE_ORDER[Math.min(5, Math.floor((f - 1) / 3))],
+    oreAmt: Math.ceil((2 + f * 0.9) * (f % 5 === 0 ? 2 : 1)),
+    xp: Math.ceil((5 + f * 2) * (f % 5 === 0 ? 4 : 1)),
+    /* every 10th floor boss spills the glowing green isotope premium */
+    iso: f % 10 === 0 ? Math.max(1, Math.round(f / 10)) : 0,
+  };
+}
+
+export function makeTowerEnemy(floor) {
+  const f = Math.max(1, floor);
+  const boss = f % 5 === 0;
+  const zoneIndex = (f - 1) % ZONES.length;
+  const reward = towerReward(f);
+  return {
+    name: boss ? TOWER_BOSS_NAMES[((f / 5) - 1) % TOWER_BOSS_NAMES.length] : TOWER_NAMES[(f + zoneIndex) % TOWER_NAMES.length],
+    tower: true,
+    floor: f,
+    boss,
+    maxHp: Math.ceil(30 * Math.pow(1.42, f - 1) * (boss ? 2.4 : 1)),
+    hp: Math.ceil(30 * Math.pow(1.42, f - 1) * (boss ? 2.4 : 1)),
+    dmg: 5 * Math.pow(1.16, f - 1) * (boss ? 1.35 : 1),
+    interval: 1500,
+    caps: reward.caps,
+    ore: reward.ore,
+    oreAmt: reward.oreAmt,
+    xp: reward.xp,
+    nextAttack: 0,
+    hitFlash: 0,
+    lunge: 0,
+    spawn: 0,
+  };
+}
+
+
+export function crewXpMult(state) {
+  return 1 + (crewBonus(state).xp || 0);
+}
+export function crewOreMult(state) {
+  return 1 + (crewBonus(state).ore || 0);
+}
 export function attributeOreMult(state) {
   return 1 + attrLevel(state, 'luk') * 0.008;
 }
@@ -466,10 +696,10 @@ export function attributeCapsMult(state) {
   return 1 + attrLevel(state, 'luk') * 0.015;
 }
 export function oreMultiplier(state) {
-  return outfitOreMult(state) * attributeOreMult(state) * perkOreMult(state) * (1 + (gearStats(state).ore || 0));
+  return outfitOreMult(state) * attributeOreMult(state) * perkOreMult(state) * crewOreMult(state) * (1 + (gearStats(state).ore || 0));
 }
 export function xpMultiplier(state) {
-  return outfitXpMult(state) * perkXpMult(state) * (1 + (gearStats(state).xp || 0));
+  return outfitXpMult(state) * perkXpMult(state) * crewXpMult(state) * (1 + (gearStats(state).xp || 0));
 }
 export function levelHpMult(state) { return 1 + (Math.max(1, state.level || 1) - 1) * 0.04; }
 export function levelAtkMult(state) { return 1 + (Math.max(1, state.level || 1) - 1) * 0.02; }
@@ -567,19 +797,20 @@ export const ZONES = [
 /* ── multipliers ───────────────────────────────────────────── */
 export function shardYieldMult(state) { return 1 + (state.shards || 0) * 0.10; }
 export function shardDamageMult(state) { return 1 + (state.shards || 0) * 0.08; }
-export function crewMult(state) { return 1 + (state.crew || 0) * 0.08; }
 
 /* Passive income from working the salvage line. Each drill rig contributes a
    small cap trickle, modified by the same charm/luck/scavenger bonuses as kills. */
 export function salvageCapsRate(state) {
   const drills = (state.drills || []).reduce((sum, count) => sum + Math.max(0, Number(count) || 0), 0);
   return drills * 0.08 * outfitCapsMult(state) * attributeCapsMult(state) * perkCapsMult(state)
+    * (1 + crewBonus(state).caps)
     * (1 + (gearStats(state).caps || 0));
 }
 
 export function pickPower(state) {
   return (2 + 2.3 * (state.pickaxe - 1))
     * miningTool(state).powerMult
+    * (1 + crewBonus(state).power)
     * (1 + (gearStats(state).power || 0));
 }
 
@@ -600,7 +831,7 @@ export function strikeYield(state, layerIndex) {
     * (1 + 0.22 * (state.pickaxe - 1))
     * miningTool(state).yieldMult
     * (1 + (gearStats(state).yield || 0))
-    * crewMult(state)
+    * (1 + crewBonus(state).yield)
     * shardYieldMult(state)
     * oreMultiplier(state)
     * nodeRichness(state.nodes[layerIndex]);
@@ -608,7 +839,7 @@ export function strikeYield(state, layerIndex) {
 
 export function drillRate(state, layerIndex) {
   const layer = LAYERS[layerIndex];
-  return layer.baseYield * 0.22 * crewMult(state) * shardYieldMult(state) * oreMultiplier(state);
+  return layer.baseYield * 0.22 * shardYieldMult(state) * oreMultiplier(state);
 }
 
 export function allDrillRate(state) {
@@ -637,10 +868,6 @@ export function drillCost(layerIndex, count) {
   const caps = Math.ceil((6 + layerIndex * 12) * Math.pow(1.18, count));
   if (caps > 0) cost.caps = caps;
   return cost;
-}
-
-export function crewCost(level) {
-  return { caps: Math.ceil(120 * Math.pow(1.75, level)) };
 }
 
 export function weaponCost(level) {
@@ -678,6 +905,7 @@ export function playerStats(state) {
   const lvl = Math.max(1, state.level || 1);
   const outfits = state.outfits || {};
   const gear = gearStats(state);
+  const crew = crewBonus(state);
   const duster = Math.max(0, Math.floor(outfits.duster || 0));
   const rebreather = Math.max(0, Math.floor(outfits.rebreather || 0));
   const charm = Math.max(0, Math.floor(outfits.charm || 0));
@@ -685,7 +913,7 @@ export function playerStats(state) {
   const vit = attrLevel(state, 'vit');
   const agi = attrLevel(state, 'agi');
   const luk = attrLevel(state, 'luk');
-  const baseHp = 100 + 30 * (g.armor - 1) + vit * 8 + (gear.hp || 0);
+  const baseHp = 100 + 30 * (g.armor - 1) + vit * 8 + (gear.hp || 0) + (crew.hp || 0);
   const maxHp = Math.max(1, Math.round(
     baseHp
     * levelHpMult(state)
@@ -699,10 +927,11 @@ export function playerStats(state) {
     * levelAtkMult(state)
     * (1 + str * 0.025)
     * shardDamageMult(state)
-    * perkAtkMult(state);
-  const crit = Math.min(0.60, 0.12 + rebreather * 0.015 + agi * 0.006 + perkCritBonus(state) + weapon.critBonus + (gear.crit || 0));
-  const defense = Math.min(0.68, 0.035 * (g.armor - 1) + duster * 0.006 + vit * 0.004 + (gear.defense || 0));
-  const capsMult = (1 + charm * 0.03) * (1 + luk * 0.015) * perkCapsMult(state) * (1 + (gear.caps || 0));
+    * perkAtkMult(state)
+    * (1 + (crew.atk || 0));
+  const crit = Math.min(0.60, 0.12 + rebreather * 0.015 + agi * 0.006 + perkCritBonus(state) + weapon.critBonus + (gear.crit || 0) + (crew.crit || 0));
+  const defense = Math.min(0.68, 0.035 * (g.armor - 1) + duster * 0.006 + vit * 0.004 + (gear.defense || 0) + (crew.def || 0));
+  const capsMult = (1 + charm * 0.03) * (1 + luk * 0.015) * perkCapsMult(state) * (1 + (gear.caps || 0)) * (1 + (crew.caps || 0));
   return {
     maxHp,
     attack,
@@ -711,15 +940,15 @@ export function playerStats(state) {
     capsMult,
     oreMult: oreMultiplier(state),
     xpMult: xpMultiplier(state),
-    healPerKill: (g.stim > 0 ? 8 + 5 * g.stim : 6) + perkHealBonus(state) + (gear.heal || 0),
+    healPerKill: (g.stim > 0 ? 8 + 5 * g.stim : 6) + perkHealBonus(state) + (gear.heal || 0) + (crew.heal || 0),
     deathMs: Math.max(1500, 4000 - 250 * g.stim),
-    speedMult: perkSpeedMult(state) * (1 + (gear.speed || 0)),
+    speedMult: perkSpeedMult(state) * (1 + (gear.speed || 0)) * (1 + (crew.speed || 0)),
     level: lvl,
   };
 }
 
 export function playerAttackInterval(state) {
-  const mult = state ? perkSpeedMult(state) : 1;
+  const mult = state ? perkSpeedMult(state) * (1 + (crewBonus(state).speed || 0)) : 1;
   const weapon = state ? combatWeapon(state) : COMBAT_WEAPONS[0];
   const speed = state ? (gearStats(state).speed || 0) : 0;
   return Math.max(220, Math.round((750 * weapon.speedMult) / (mult * (1 + speed))));
@@ -779,7 +1008,7 @@ export function fmtRate(n) {
 
 export function costLabel(cost) {
   return Object.entries(cost).map(([k, v]) => {
-    const name = k === 'caps' ? 'caps' : ORES[k].name;
+    const name = k === 'caps' ? 'coins' : k === 'iso' ? 'isotopes' : ORES[k].name;
     return `${fmt(v)} ${name}`;
   }).join(' · ');
 }
@@ -787,6 +1016,7 @@ export function costLabel(cost) {
 export function canAfford(state, cost) {
   for (const [k, v] of Object.entries(cost)) {
     if (k === 'caps') { if ((state.caps || 0) < v) return false; }
+    else if (k === 'iso') { if ((state.iso || 0) < v) return false; }
     else if ((state.ores[k] || 0) < v) return false;
   }
   return true;
@@ -796,6 +1026,7 @@ export function spend(state, cost) {
   if (!canAfford(state, cost)) return false;
   for (const [k, v] of Object.entries(cost)) {
     if (k === 'caps') state.caps -= v;
+    else if (k === 'iso') state.iso -= v;
     else state.ores[k] -= v;
   }
   return true;

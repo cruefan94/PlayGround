@@ -1,10 +1,12 @@
 import {
   LAYERS, ZONES, ORES, ORE_ORDER, STIM_MAX, PERKS, ATTRIBUTES, OUTFITS,
   MINING_TOOLS, COMBAT_WEAPONS, GEAR_SLOTS, MAX_INVENTORY, RARITIES,
+  CREW_POOL, CREW_CLASSES, CREW_CLASS_MAP, CREW_COUNT, crewCount, CHESTS, crewBonus,
+  TASKS, TASK_MAP, taskProgress, isoValue, STORE_REROLL_COST, STORE_STOCK_SIZE,
   fmt, costLabel, canAfford, spend, makeEnemy, playerStats,
   playerAttackInterval, layerMaxHp, strikeYield, pickPower, miningTool, combatWeapon, toolCooldown,
   drillRate, salvageCapsRate, overloadGain, xpNeeded, xpMultiplier, outfitCost, outfitLevel,
-  attrLevel, perkRank, pickaxeCost, crewCost, drillCost,
+  attrLevel, perkRank, pickaxeCost, drillCost, towerUnlock, makeTowerEnemy, towerReward,
   weaponCost, armorCost, stimCost, makeLootItem, lootRunCost, gearStats, gearScore,
   gearStatLines, rarityOf, scrapValue, equippedItem,
 } from './data.js';
@@ -29,6 +31,7 @@ class Game {
     this.lastSave = performance.now();
 
     const offline = offlineReport(this.state);
+    this.ensureStoreStock();
     this.setupEnemy(performance.now());
 
     this.mineRenderer = new MineRenderer($('mineCanvas'), this);
@@ -52,8 +55,13 @@ class Game {
   }
 
   setupEnemy(now) {
-    const c = this.state.combat;
-    if (!c.enemy || !c.enemy.hp || c.enemy.hp <= 0) {
+    const s = this.state;
+    const c = s.combat;
+    if (s.tower?.active) {
+      if (!c.enemy || !c.enemy.hp || c.enemy.hp <= 0 || !c.enemy.tower) {
+        c.enemy = makeTowerEnemy(s.tower.floor);
+      }
+    } else if (!c.enemy || !c.enemy.hp || c.enemy.hp <= 0 || c.enemy.tower) {
       const wave = c.waves[c.zone] || 1;
       c.enemy = makeEnemy(c.zone, wave);
     }
@@ -242,7 +250,7 @@ class Game {
     const cost = 100 + spent * 10;
     if (s.caps < cost) {
       this.audio.error();
-      this.ui.toast(`Respec costs ${fmt(cost)} caps (money).`, 'bad');
+      this.ui.toast(`Respec costs ${fmt(cost)} coins.`, 'bad');
       return;
     }
     s.caps -= cost;
@@ -251,8 +259,8 @@ class Game {
     const stats = playerStats(s);
     s.combat.hp = Math.min(stats.maxHp, s.combat.hp);
     this.audio.buy();
-    this.ui.toast(`Attributes reset · ${spent} points refunded · −${fmt(cost)} caps`, 'good');
-    this.log(`Paid ${fmt(cost)} caps to reset ${spent} attribute points.`, '');
+    this.ui.toast(`Attributes reset · ${spent} points refunded · −${fmt(cost)} coins`, 'good');
+    this.log(`Paid ${fmt(cost)} coins to reset ${spent} attribute points.`, '');
     this.ui.render();
     this.saveNow();
   }
@@ -401,16 +409,239 @@ class Game {
     this.saveNow();
   }
 
-  buyCrew() {
+  /* ── chests & crew recruitment ───────────────────────────── */
+  rollCrewClass(weights) {
+    const entries = Object.entries(weights);
+    const total = entries.reduce((sum, [, w]) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (const [cls, w] of entries) {
+      roll -= w;
+      if (roll < 0) return Number(cls);
+    }
+    return Number(entries[0][0]);
+  }
+
+  buyChest(index) {
     const s = this.state;
-    const cost = crewCost(s.crew);
-    if (!canAfford(s, cost)) return this.deny(cost);
-    spend(s, cost);
-    s.crew += 1;
-    this.audio.buy();
-    this.ui.toast(`Survivor ${s.crew} joined · ore yield +${s.crew * 8}%`, 'good');
-    this.log(`Crew expanded to ${s.crew}. Every ore source is ${s.crew * 8}% richer.`, 'good');
+    const chest = CHESTS[index];
+    if (!chest) return;
+    if ((s.level || 1) < chest.req) {
+      this.ui.toast(`${chest.name} unlocks at Level ${chest.req}.`, 'bad');
+      this.audio.error();
+      return;
+    }
+    if (!canAfford(s, { iso: chest.cost })) return this.deny({ iso: chest.cost });
+    spend(s, { iso: chest.cost });
+    const cls = this.rollCrewClass(chest.weights);
+    const pool = CREW_POOL.filter((member) => member.cls === cls);
+    const member = pool[Math.floor(Math.random() * pool.length)];
+    const info = CREW_CLASS_MAP[cls];
+    if (s.crew[member.id]) {
+      const refund = info.refund;
+      s.caps += refund;
+      s.stats.totalCaps = (s.stats.totalCaps || 0) + refund;
+      this.audio.buy();
+      this.ui.toast(`DUPLICATE · ${member.name} → +${fmt(refund)} coins`, '');
+      this.log(`Opened a ${chest.name}: ${member.name} again. Duplicate crew converted to ${fmt(refund)} coins.`, '');
+      this.ui.render();
+      this.saveNow();
+      this.ui.openChestResult(chest, member, false);
+      return;
+    }
+    s.crew[member.id] = true;
+    this.audio.levelUp();
+    this.ui.toast(`CREW RECRUITED · ${member.name} · ${info.name}`, 'lore');
+    this.log(`${member.name} (${info.name}) joined the rig from a ${chest.name}. Permanent buff: ${member.buff}.`, 'lore');
     this.ui.render();
+    this.saveNow();
+    this.ui.openChestResult(chest, member, true);
+  }
+
+  /* ── ascent tower ────────────────────────────────────────── */
+  toggleTower() {
+    const s = this.state;
+    if (!towerUnlock(s)) {
+      this.ui.toast('The Ascent Tower opens at Level 5 or after securing Highway Camp.', 'bad');
+      this.audio.error();
+      return;
+    }
+    if (s.tower.active) this.exitTower('You climb down the tower and catch your breath.');
+    else this.enterTower();
+  }
+
+  enterTower() {
+    const s = this.state;
+    const now = performance.now();
+    s.tower.active = true;
+    this.state.combat.enemy = makeTowerEnemy(s.tower.floor);
+    this.state.combat.enemy.nextAttack = now + this.state.combat.enemy.interval * 1.2;
+    this.state.combat.nextPlayerAttack = now + 300;
+    this.combatRenderer.enemyKey = '';
+    this.audio.overload();
+    this.ui.toast(`ASCENT TOWER · FLOOR ${s.tower.floor}`, 'lore');
+    this.log(`Entered the Ascent Tower. Floor ${s.tower.floor}. Rewards and difficulty rise with every floor.`, 'lore');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  exitTower(reason) {
+    const s = this.state;
+    s.tower.active = false;
+    const now = performance.now();
+    this.state.combat.enemy = makeEnemy(this.state.combat.zone, this.state.combat.waves[this.state.combat.zone]);
+    this.state.combat.enemy.nextAttack = now + this.state.combat.enemy.interval;
+    this.state.combat.nextPlayerAttack = now + 300;
+    this.combatRenderer.enemyKey = '';
+    if (reason) this.log(reason, '');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  towerClear(now, stats) {
+    const s = this.state;
+    const c = s.combat;
+    const floor = s.tower.floor;
+    const reward = towerReward(floor);
+    const caps = Math.max(1, Math.ceil(reward.caps * (stats.capsMult || 1)));
+    const oreAmt = Math.max(1, Math.ceil(reward.oreAmt * (stats.oreMult || 1)));
+    const boss = floor % 5 === 0;
+    s.caps += caps;
+    s.stats.totalCaps = (s.stats.totalCaps || 0) + caps;
+    s.ores[reward.ore] = (s.ores[reward.ore] || 0) + oreAmt;
+    s.stats.totalMined += oreAmt;
+    s.stats.kills = (s.stats.kills || 0) + 1;
+    s.combat.hp = Math.min(stats.maxHp, s.combat.hp + stats.healPerKill);
+    this.combatRenderer.enemyKilled(c.zone, boss);
+    this.audio.kill();
+    this.gainXp(reward.xp);
+    const isoGain = reward.iso || 0;
+    if (isoGain > 0) s.iso = (s.iso || 0) + isoGain;
+
+    this.ui.toast(`FLOOR ${floor} CLEARED · +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} ISO` : ''}`, 'good');
+    this.log(`Floor ${floor} down. +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} glowing isotopes` : ''} · +${reward.xp} XP.`, 'good');
+    if (boss) this.audio.overload();
+
+    // unique weapons & armor from the tower
+    const dropChance = boss ? 1 : 0.24;
+    if (Math.random() < dropChance) {
+      const uniqueChance = boss ? 0.42 : 0.06;
+      const unique = Math.random() < uniqueChance;
+      const item = unique
+        ? makeLootItem(s, { unique: true })
+        : makeLootItem(s, { boss });
+      if (item && this.addLoot(item)) {
+        const rarity = rarityOf(item);
+        this.ui.toast(item.unique ? `UNIQUE · ${item.name}` : `LOOT · ${item.name} · ${rarity.name.toUpperCase()}`, item.unique || rarity.rank >= 2 ? 'lore' : 'good');
+        this.log(item.unique
+          ? `UNIQUE recovered from the tower: ${item.name} (${item.slot}). ${gearStatLines(item).join(' · ')}.`
+          : `Recovered ${rarity.name} ${item.slot}: ${item.name}. ${gearStatLines(item).join(' · ')}.`, item.unique || rarity.rank >= 2 ? 'lore' : 'good');
+      }
+    }
+
+    s.tower.best = Math.max(s.tower.best || 0, floor);
+    s.tower.floor = floor + 1;
+    // the dead enemy is out of the arena: null it so the next tick spawns the next floor
+    c.enemy = null;
+    this.nextSpawn = now + 700;
+    this.ui.render();
+    this.saveNow();
+    return true;
+  }
+
+  /* ── isotope store: gear stall & contracts ────────────────── */
+  rollStoreStock() {
+    const s = this.state;
+    const stock = [];
+    stock.push(makeLootItem(s, { slot: 'weapon', rarity: 'legendary' }));
+    stock.push(makeLootItem(s, { slot: 'armor', rarity: 'legendary' }));
+    stock.push(Math.random() < 0.55 ? makeLootItem(s, { unique: true }) : makeLootItem(s, { rarity: 'legendary' }));
+    s.store.stock = stock.filter(Boolean);
+  }
+
+  ensureStoreStock() {
+    if (!this.state.store?.stock?.length) this.rollStoreStock();
+  }
+
+  buyStoreOffer(index) {
+    const s = this.state;
+    const stock = s.store.stock || [];
+    const item = stock[index];
+    if (!item) return;
+    const price = isoValue(item);
+    if ((s.inventory || []).length >= MAX_INVENTORY) {
+      this.ui.toast('Salvage pack is full — scrap something first.', 'bad');
+      this.audio.error();
+      return;
+    }
+    if (!canAfford(s, { iso: price })) return this.deny({ iso: price });
+    spend(s, { iso: price });
+    if (this.addLoot(item)) {
+      const rarity = rarityOf(item);
+      this.audio.buy();
+      this.ui.toast(isoValue && item.unique ? `ANOMALY GEAR · ${item.name}` : `GEAR PURCHASED · ${item.name} · ${rarity.name.toUpperCase()}`, item.unique || rarity.rank >= 3 ? 'lore' : 'good');
+      this.log(`Bought ${item.name} (${rarity.name} ${item.slot}) from the store for ${fmt(price)} isotopes. ${gearStatLines(item).join(' · ')}.`, item.unique || rarity.rank >= 3 ? 'lore' : 'good');
+      // the stall refills the empty spot immediately
+      const slotId = item.slot;
+      const fallback = slotId === 'weapon' || slotId === 'armor'
+        ? makeLootItem(s, { slot: slotId, rarity: 'legendary' })
+        : (Math.random() < 0.55
+          ? makeLootItem(s, { unique: true })
+          : makeLootItem(s, { rarity: 'legendary' }));
+      s.store.stock[index] = fallback || null;
+      if (!s.store.stock[index]) s.store.stock.splice(index, 1);
+      s.store.stock = s.store.stock.filter(Boolean);
+    }
+    this.ui.render();
+    this.saveNow();
+  }
+
+  rerollStore() {
+    const s = this.state;
+    if (!canAfford(s, { iso: STORE_REROLL_COST })) return this.deny({ iso: STORE_REROLL_COST });
+    spend(s, { iso: STORE_REROLL_COST });
+    this.rollStoreStock();
+    this.audio.buy();
+    this.log(`The anomaly stall restocked (${STORE_STOCK_SIZE} fresh top-tier offers, ${fmt(STORE_REROLL_COST)} isotopes).`, '');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  claimTask(id) {
+    const s = this.state;
+    const task = TASK_MAP[id];
+    if (!task || s.tasks[id]) return;
+    const progress = taskProgress(s)[task.metric] || 0;
+    if (progress < task.goal) {
+      this.ui.toast(`${task.name}: ${Math.min(progress, task.goal)} / ${task.goal}`, 'bad');
+      this.audio.error();
+      return;
+    }
+    s.tasks[id] = true;
+    s.iso = (s.iso || 0) + task.iso;
+    this.audio.levelUp();
+    this.ui.toast(`CONTRACT PAID · ${task.name} · +${task.iso} ISO`, 'lore');
+    this.log(`Contract paid: ${task.desc} Payout ${task.iso} glowing isotopes.`, 'lore');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  /* ── autosort ────────────────────────────────────────────── */
+  sortInventory(mode) {
+    const s = this.state;
+    const items = [...(s.inventory || [])];
+    const rank = rarityOf;
+    const cmp = {
+      score: (a, b) => gearScore(b) - gearScore(a),
+      rarity: (a, b) => (rank(b).rank - rank(a).rank) || (gearScore(b) - gearScore(a)),
+      slot: (a, b) => (a.slot || '').localeCompare(b.slot || '') || gearScore(b) - gearScore(a),
+      class: (a, b) => String(a.classId || (a.slot || '')).localeCompare(String(b.classId || (b.slot || ''))) || gearScore(b) - gearScore(a),
+      level: (a, b) => (b.level || 0) - (a.level || 0),
+      name: (a, b) => (a.name || '').localeCompare(b.name || ''),
+    }[mode] || null;
+    if (cmp) items.sort(cmp);
+    else return;
+    s.inventory = items;
+    this.audio.buy();
     this.saveNow();
   }
 
@@ -532,10 +763,13 @@ class Game {
       const value = scrapValue(item);
       s.caps += value;
       s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
-      this.ui.toast(`PACK FULL · ${item.name} auto-scrapped +${fmt(value)} caps`, 'bad');
+      this.ui.toast(`PACK FULL · ${item.name} auto-scrapped +${fmt(value)} coins`, 'bad');
       return false;
     }
     s.inventory.push(item);
+    if (item.unique || rarityOf(item).rank >= 4) {
+      s.stats.legendaryFound = (s.stats.legendaryFound || 0) + 1;
+    }
     return true;
   }
 
@@ -544,7 +778,7 @@ class Game {
     const cost = lootRunCost(s);
     if (!canAfford(s, { caps: cost })) {
       this.audio.error();
-      this.ui.toast(`A salvage run costs ${fmt(cost)} caps.`, 'bad');
+      this.ui.toast(`A salvage run costs ${fmt(cost)} coins.`, 'bad');
       return;
     }
     spend(s, { caps: cost });
@@ -605,8 +839,8 @@ class Game {
     s.caps += value;
     s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
     this.audio.buy();
-    this.ui.toast(`SCRAPPED · ${item.name} · +${fmt(value)} caps`, '');
-    this.log(`Scrapped ${item.name} for ${fmt(value)} caps.`, '');
+    this.ui.toast(`SCRAPPED · ${item.name} · +${fmt(value)} coins`, '');
+    this.log(`Scrapped ${item.name} for ${fmt(value)} coins.`, '');
     this.ui.render();
     this.saveNow();
     this.ui.refreshOpenGear();
@@ -639,7 +873,7 @@ class Game {
 
     if (!c.enemy) {
       if (now >= this.nextSpawn) {
-        c.enemy = makeEnemy(c.zone, c.waves[c.zone]);
+        c.enemy = s.tower?.active ? makeTowerEnemy(s.tower.floor) : makeEnemy(c.zone, c.waves[c.zone] || 1);
         c.enemy.nextAttack = now + c.enemy.interval * 0.9;
       } else {
         return;
@@ -686,6 +920,7 @@ class Game {
   killEnemy(now, stats) {
     const s = this.state;
     const c = s.combat;
+    if (s.tower?.active) return this.towerClear(now, stats || playerStats(s));
     const enemy = c.enemy;
     const zone = ZONES[c.zone];
     const caps = Math.max(1, Math.round(enemy.caps * (stats.capsMult || 1)));
@@ -703,8 +938,12 @@ class Game {
     this.audio.kill();
     this.gainXp(xp);
     if (enemy.boss) {
-      this.ui.toast(`${enemy.name} DOWN · +${fmt(caps)} caps · +${xp} XP`, 'good');
-      this.log(`${enemy.name} fell. +${fmt(caps)} caps · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, 'good');
+      s.stats.bossKills = (s.stats.bossKills || 0) + 1;
+      const bossWave = (c.waves[c.zone] || 2) - 1;
+      const isoGain = 1 + (bossWave % 50 === 0 ? 2 : 0);
+      s.iso = (s.iso || 0) + isoGain;
+      this.ui.toast(`${enemy.name} DOWN · +${fmt(caps)} coins · +${fmt(isoGain)} ISO · +${xp} XP`, 'good');
+      this.log(`${enemy.name} fell on wave ${bossWave}. +${fmt(caps)} coins · +${fmt(isoGain)} glowing isotopes · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, 'good');
       this.audio.overload();
       if (c.zone === ZONES.length - 1) {
         c.primeKills += 1;
@@ -712,7 +951,7 @@ class Game {
         this.ui.toast('CORE CHARGED · OVERLOAD AVAILABLE IN FORGE', 'lore');
       }
     } else {
-      this.log(`${enemy.name} down · +${fmt(caps)} caps · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, '');
+      this.log(`${enemy.name} down · +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, '');
     }
     if (c.waves[c.zone] % 10 === 1 && c.waves[c.zone] > 1) {
       this.log(`Wave ${c.waves[c.zone]} in ${zone.name}. Something bigger is coming.`, 'alert');
@@ -744,6 +983,10 @@ class Game {
     c.enemy = null;
     s.stats.deaths = (s.stats.deaths || 0) + 1;
     this.nextSpawn = now + stats.deathMs + 300;
+    if (s.tower?.active) {
+      this.ui.toast(`TOWER RUN OVER · ENDED ON FLOOR ${s.tower.floor}`, 'bad');
+      this.exitTower(`Knocked out on tower floor ${s.tower.floor}. Best floor ${s.tower.best || 1} recorded.`);
+    }
     this.combatRenderer.playerDied();
     this.audio.death();
     this.log(`Knocked out in ${ZONES[c.zone].name}. Reboot in ${(stats.deathMs / 1000).toFixed(1)}s.`, 'alert');
@@ -764,6 +1007,7 @@ class Game {
     const s = this.state;
     const c = s.combat;
     if (index < 0 || index >= ZONES.length) return;
+    if (s.tower?.active) this.exitTower('The tower waits. Back in the wasteland.');
     if (index < c.unlocked) {
       if (index === c.zone) return;
       c.zone = index;
@@ -816,7 +1060,7 @@ class Game {
       eyebrow: 'REACTOR CONTROL',
       title: 'Overload the core?',
       body: `
-        <p>The reactor will detonate. Your ore, caps, drills, pickaxe, crew, combat gear and territories will be <strong>wiped</strong>.</p>
+        <p>The reactor will detonate. Your ore, coins, drills, pickaxe, crew, combat gear and territories will be <strong>wiped</strong>.</p>
         <p>You will gain <span class="gain">${gain} core shard${gain > 1 ? 's' : ''}</span> (now ${s.shards}, after ${s.shards + gain}). Each shard gives <strong>+10% ore yield</strong> and <strong>+8% damage</strong>, forever.</p>
         <p>Your <strong>survivor level, attributes, perks and outfits persist</strong> through the overload.</p>
         <p>This cannot be undone.</p>`,

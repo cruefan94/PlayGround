@@ -1,7 +1,10 @@
 import {
   ORES, ORE_ORDER, LAYERS, ZONES, STIM_MAX, OUTFITS, ATTRIBUTES, PERKS,
-  MINING_TOOLS, COMBAT_WEAPONS, GEAR_SLOTS, MAX_INVENTORY,
-  fmt, fmtRate, costLabel, canAfford, pickPower, pickaxeCost, crewCost,
+  MINING_TOOLS, COMBAT_WEAPONS, COMBAT_WEAPON_MAP, GEAR_SLOTS, MAX_INVENTORY,
+  CHESTS, CREW_POOL, CREW_CLASSES, CREW_CLASS_MAP, CREW_COUNT, crewCount, crewBonus,
+  TASKS, taskProgress, isoValue, STORE_REROLL_COST,
+  towerUnlock, towerReward,
+  fmt, fmtRate, costLabel, canAfford, pickPower, pickaxeCost,
   drillCost, drillRate, weaponCost, armorCost, stimCost, playerStats, miningTool, combatWeapon,
   salvageCapsRate, nodeRichness, layerMaxHp, strikeYield, overloadGain, playerAttackInterval,
   xpNeeded, outfitCost, outfitLevel, attrLevel, perkRank, levelHpMult, levelAtkMult,
@@ -29,6 +32,9 @@ export class UI {
     this.buildDrills();
     this.buildZones();
     this.buildLoadout();
+    this.buildCrew();
+    this.buildStore();
+    this.buildLoadoutPanel();
     this.cacheRefs();
     this.bind();
     this.render();
@@ -40,7 +46,8 @@ export class UI {
     const wrap = $('resources');
     this.resEls = {};
     const specs = [
-      { key: 'caps', name: 'CAPS', color: '#e9c46a', cls: 'caps' },
+      { key: 'caps', name: 'COINS', color: '#e9c46a', cls: 'caps' },
+      { key: 'iso', name: 'ISO', color: '#7dff5a', cls: 'iso' },
       ...ORE_ORDER.map((key) => ({ key, name: ORES[key].name.toUpperCase(), color: ORES[key].color })),
       { key: 'shards', name: 'SHARDS', color: '#b98aff', cls: 'shards' },
     ];
@@ -96,11 +103,11 @@ export class UI {
         <span class="card-cta" data-cta>UPGRADE</span>
       </button>`;
 
-    $('toolCards').innerHTML = fmtCard('pickaxe', '⚒', 'TOOL TUNING') + fmtCard('crew', '☗', 'SURVIVOR CREW');
+    $('toolCards').innerHTML = fmtCard('pickaxe', '⚒', 'TOOL TUNING');
     $('gearCards').innerHTML = fmtCard('weapon', '⚔', 'WEAPON TUNING') + fmtCard('armor', '⛨', 'RAD PLATE') + fmtCard('stim', '✚', 'STIM KIT');
 
     this.cardEls = {};
-    for (const id of ['pickaxe', 'crew', 'weapon', 'armor', 'stim']) {
+    for (const id of ['pickaxe', 'weapon', 'armor', 'stim']) {
       const card = $(`card-${id}`);
       this.cardEls[id] = {
         card,
@@ -228,8 +235,9 @@ export class UI {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'loadout-slot';
-      btn.dataset.action = 'gear';
+      btn.dataset.tab = 'loadout';
       btn.dataset.slot = slot.id;
+      btn.title = 'Open the LOADOUT tab';
       btn.innerHTML = `
         <span class="ls-icon">${slot.icon}</span>
         <span class="ls-body">
@@ -244,6 +252,35 @@ export class UI {
         rarity: btn.querySelector('[data-rarity]'),
       };
     }
+  }
+
+  buildCrew() {
+    // roster, grouped by class
+    const rosterWrap = $('crewRoster');
+    rosterWrap.innerHTML = CREW_POOL.map((member) => {
+      const info = CREW_CLASS_MAP[member.cls];
+      return `
+        <div class="crew-tile" data-crew="${member.id}" style="--cc:${info.color}">
+          <span class="crew-cls">${info.name}</span>
+          <strong class="crew-name">${member.name}</strong>
+          <span class="crew-blurb">${member.blurb}</span>
+          <span class="crew-buff" data-buff>${member.buff}</span>
+          <span class="crew-state" data-state></span>
+        </div>`;
+    }).join('');
+    this.crewTileEls = this.collectCrewTiles();
+  }
+
+  collectCrewTiles() {
+    const tiles = {};
+    for (const member of CREW_POOL) {
+      const el = document.querySelector(`.crew-tile[data-crew="${member.id}"]`);
+      tiles[member.id] = {
+        el,
+        state: el.querySelector('[data-state]'),
+      };
+    }
+    return tiles;
   }
 
   cacheRefs() {
@@ -305,6 +342,24 @@ export class UI {
     r.playerLevel = $('playerLevel');
     r.playerXpBar = $('playerXpBar');
     r.playerXpText = $('playerXpText');
+    r.rosterBadge = $('rosterBadge');
+    r.rosterCount = $('rosterCount');
+    r.chestSummary = $('chestSummary');
+    r.buffEmptyNote = $('buffEmptyNote');
+    r.crewBuffChips = $('crewBuffChips');
+    r.storeBadge = $('storeBadge');
+    r.storeStockNote = $('storeStockNote');
+    r.storeRollBtn = $('storeRollBtn');
+    r.storeTaskNote = $('storeTaskNote');
+    r.packBadge = $('packBadge');
+    r.bonusSummary = $('bonusSummary');
+    r.loadCaps = $('loadCaps');
+    r.salvageCost2 = $('salvageCost2');
+    r.salvageRunBtn2 = $('salvageRunBtn2');
+    r.towerStrip = $('towerStrip');
+    r.towerFloorText = $('towerFloorText');
+    r.towerRewardText = $('towerRewardText');
+    r.towerBtn = $('towerBtn');
   }
 
   bind() {
@@ -333,11 +388,12 @@ export class UI {
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       if (!$('modal').hidden) return;
+      const tab = document.getElementById('app').dataset.tab;
       if (e.code === 'Space') {
         e.preventDefault();
-        if (document.getElementById('app').dataset.tab === 'mine' || window.innerWidth > 980) this.game.strikeMine();
+        if (tab === 'mine') this.game.strikeMine();
       } else if (e.key === 'f' || e.key === 'F') {
-        if (document.getElementById('app').dataset.tab === 'fight' || window.innerWidth > 980) this.game.attack();
+        if (tab === 'fight') this.game.attack();
       }
     });
 
@@ -366,13 +422,11 @@ export class UI {
       case 'automine': g.toggleAutoMine(); break;
       case 'equiptool': g.equipTool(target?.dataset.id); break;
       case 'equipweapon': g.equipWeapon(target?.dataset.id); break;
-      case 'gear': this.openGear(); break;
       case 'salvagerun': g.salvageRun(); break;
       case 'equiploot': g.equipLoot(target?.dataset.id); break;
       case 'unequip': g.unequipSlot(target?.dataset.slot); break;
       case 'scraploot': g.scrapLoot(target?.dataset.id); break;
       case 'pickaxe': g.buyPickaxe(); break;
-      case 'crew': g.buyCrew(); break;
       case 'weapon': g.buyWeapon(); break;
       case 'armor': g.buyArmor(); break;
       case 'stim': g.buyStim(); break;
@@ -380,6 +434,13 @@ export class UI {
       case 'layer': g.selectLayer(index); break;
       case 'zone': g.selectZone(index); break;
       case 'outfit': g.buyOutfit(index); break;
+      case 'chest': g.buyChest(index); break;
+      case 'storeoffer': g.buyStoreOffer(index); break;
+      case 'storeroll': g.rerollStore(); break;
+      case 'claim': g.claimTask(target?.dataset.id); break;
+      case 'autosort': g.sortInventory(this.packView.sort); break;
+      case 'packfilter': this.setPackFilter(target); break;
+      case 'tower': g.toggleTower(); break;
       case 'attr': g.spendPoint(target?.dataset.id); break;
       case 'perks': g.openPerks(); break;
       case 'respec': g.respec(); break;
@@ -404,7 +465,10 @@ export class UI {
     this.renderResources();
     this.renderMine();
     this.renderForge();
+    this.renderCrew();
+    this.renderStore();
     this.renderLoadout();
+    this.renderLoadoutPanel();
     this.renderFight();
     this.renderLog();
     this.renderFooter();
@@ -432,7 +496,10 @@ export class UI {
     const capsRate = salvageCapsRate(s);
     setText(caps.val, fmt(s.caps));
     setText(caps.per, capsRate > 0 ? `+${fmtRate(capsRate)}` : '');
-    caps.chip.title = `Salvage caps (money) · ${capsRate > 0 ? `${fmtRate(capsRate)} from salvage · ` : ''}earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
+    caps.chip.title = `Salvage coins (common money) · ${capsRate > 0 ? `${fmtRate(capsRate)} from salvage · ` : ''}earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
+    const iso = this.resEls.iso;
+    setText(iso.val, fmt(s.iso || 0));
+    iso.chip.title = `Glowing green isotopes (premium) — from 10-round bosses, tower milestones and contracts. Spent only in the STORE.`;
     const shards = this.resEls.shards;
     shards.chip.style.display = showShards ? '' : 'none';
     setText(shards.val, fmt(s.shards));
@@ -529,18 +596,10 @@ export class UI {
     setCta(pick.cta, 'UPGRADE', 'upgrade');
 
     // crew
-    const cc = crewCost(s.crew);
-    const ccAff = canAfford(s, cc);
-    const crew = this.cardEls.crew;
-    crew.lvl.textContent = `LV.${s.crew}`;
-    crew.desc.innerHTML = `Ore yield <b>+${s.crew * 8}%</b> → <b>+${(s.crew + 1) * 8}%</b> · survivors work the rigs`;
-    crew.cost.textContent = costLabel(cc);
-    crew.card.classList.toggle('affordable', ccAff);
-    setCta(crew.cta, 'RECRUIT', 'upgrade');
-    setText(r.crewBadge, `CREW ${s.crew}`);
+    setText(r.crewBadge, `CREW ${crewCount(s)} / ${CREW_COUNT}`);
     const oreRate = LAYERS.reduce((sum, _, i) => sum + (s.drills[i] || 0) * drillRate(s, i), 0);
     const capsRate = salvageCapsRate(s);
-    setText(r.drillRateTotal, `${fmtRate(oreRate)} ore · ${fmtRate(capsRate)} caps`);
+    setText(r.drillRateTotal, `${fmtRate(oreRate)} ore · ${fmtRate(capsRate)} coins`);
 
     // mining tools
     const equippedTool = miningTool(s);
@@ -694,6 +753,72 @@ export class UI {
     }
   }
 
+  renderCrew() {
+    const s = this.s;
+    const r = this.refs;
+    const owned = crewCount(s);
+    setText(r.rosterBadge, `CREW ${owned} / ${CREW_COUNT}`);
+    setText(r.rosterCount, `${owned} RECRUITED · ${CREW_COUNT - owned} REMAINING`);
+    setText(r.buffEmptyNote, owned ? `${owned} active` : 'none yet — buy chests in the STORE');
+
+    // aggregate buff chips
+    const bonus = crewBonus(s);
+    const chips = [];
+    if (bonus.ore) chips.push(`ORE +${(bonus.ore * 100).toFixed(1)}%`);
+    if (bonus.caps) chips.push(`COINS +${(bonus.caps * 100).toFixed(1)}%`);
+    if (bonus.atk) chips.push(`ATK +${(bonus.atk * 100).toFixed(1)}%`);
+    if (bonus.crit) chips.push(`CRIT +${(bonus.crit * 100).toFixed(1)}%`);
+    if (bonus.def) chips.push(`DEF +${(bonus.def * 100).toFixed(1)}%`);
+    if (bonus.hp) chips.push(`HP +${Math.round(bonus.hp)}`);
+    if (bonus.heal) chips.push(`HEAL +${Math.round(bonus.heal)}/kill`);
+    if (bonus.speed) chips.push(`SPEED +${(bonus.speed * 100).toFixed(1)}%`);
+    if (bonus.xp) chips.push(`XP +${(bonus.xp * 100).toFixed(1)}%`);
+    if (bonus.power) chips.push(`VEIN +${(bonus.power * 100).toFixed(1)}%`);
+    if (bonus.yield) chips.push(`YIELD +${(bonus.yield * 100).toFixed(1)}%`);
+    r.crewBuffChips.innerHTML = chips.length
+      ? chips.map((chip) => `<span class="buff-chip">${chip}</span>`).join('')
+      : '<span class="buff-none">No crew on the rig yet — buy supply chests in the STORE with isotopes.</span>';
+
+    // roster tiles
+    for (const member of CREW_POOL) {
+      const tile = this.crewTileEls[member.id];
+      if (!tile?.el) continue;
+      const has = !!s.crew[member.id];
+      tile.el.classList.toggle('owned', has);
+      tile.el.classList.toggle('locked', !has);
+      setText(tile.state, has ? 'ON THE RIG' : 'NOT RECRUITED');
+    }
+  }
+
+  openChestResult(chest, member, isNew) {
+    const info = CREW_CLASS_MAP[member.cls];
+    const body = isNew
+      ? `
+        <div class="chest-reveal" style="--cc:${info.color}">
+          <span class="chest-reveal-tier">${chest.icon} ${chest.name} → CLASS ${member.cls}</span>
+          <strong class="chest-reveal-name">${member.name}</strong>
+          <span class="chest-reveal-cls">${info.name} CREW</span>
+          <span class="chest-reveal-blurb">${member.blurb}</span>
+          <span class="chest-reveal-buff">PERMANENT BUFF · ${member.buff}</span>
+        </div>
+        <p>Crew buffs stack across every recruit and other upgrades. This one works the rig forever, even through a core overload.</p>`
+      : `
+        <div class="chest-reveal duplicate" style="--cc:${info.color}">
+          <span class="chest-reveal-tier">${chest.icon} ${chest.name} → CLASS ${member.cls}</span>
+          <strong class="chest-reveal-name">${member.name}</strong>
+          <span class="chest-reveal-cls">${info.name} — ALREADY ON THE RIG</span>
+          <span class="chest-reveal-buff">DUPLICATE → +${fmt(info.refund)} coins</span>
+        </div>
+        <p>Duplicate recruits are converted into coins automatically. Higher classes pay out bigger bounties.</p>`;
+    this.openModal({
+      eyebrow: 'RECRUITMENT',
+      title: chest.name,
+      kind: 'chest',
+      body,
+      actions: [{ label: isNew ? 'WELCOME ABOARD' : 'BACK TO WORK', kind: isNew ? '' : '' }],
+    });
+  }
+
   loadoutScore() {
     return GEAR_SLOTS.reduce((sum, slot) => {
       const item = equippedItem(this.s, slot.id);
@@ -741,10 +866,37 @@ export class UI {
     const perfNow = performance.now();
     const dead = c.deadUntil > perfNow;
 
-    setText(r.zoneBadge, zone.name.toUpperCase());
-    setText(r.zoneProgress, `${c.unlocked} / ${ZONES.length} SECURED`);
-    setText(r.wavePill, enemy ? `${enemy.boss ? 'BOSS · ' : ''}WAVE ${c.waves[c.zone] || 1}` : `WAVE ${c.waves[c.zone] || 1}`);
+    // ── tower mode reshapes the arena header & strips ─────────
+    const tower = s.tower || { floor: 1, best: 0, active: false };
+    const towerOpen = towerUnlock(s);
+    if (tower.active) {
+      setText(r.zoneBadge, `TOWER · FLOOR ${tower.floor}`);
+      setText(r.zoneProgress, `BEST ${tower.best || '—'} · TOWER RUN`);
+      setText(r.wavePill, enemy ? `${enemy.boss ? 'FLOOR BOSS · ' : ''}FLOOR ${tower.floor}` : `FLOOR ${tower.floor}`);
+    } else {
+      setText(r.zoneBadge, zone.name.toUpperCase());
+      setText(r.zoneProgress, `${c.unlocked} / ${ZONES.length} SECURED`);
+      setText(r.wavePill, enemy ? `${enemy.boss ? 'BOSS · ' : ''}WAVE ${c.waves[c.zone] || 1}` : `WAVE ${c.waves[c.zone] || 1}`);
+    }
+    r.wavePill.classList.toggle('tower', !!tower.active);
     r.wavePill.classList.toggle('boss', !!enemy?.boss);
+    this.refs.towerStrip.classList.toggle('active', !!tower.active);
+    this.refs.towerStrip.classList.toggle('locked', !towerOpen && !tower.active);
+    if (towerOpen || tower.active) {
+      const reward = towerReward(tower.floor);
+      setText(r.towerFloorText, tower.active
+        ? `FLOOR ${tower.floor}${tower.best ? ` · BEST ${tower.best}` : ''}`
+        : `BEST ${tower.best || '—'} · FLOOR ${tower.floor} READY`);
+      setText(r.towerRewardText, `CLEAR · +${fmt(Math.ceil(reward.caps * (stats.capsMult || 1)))} caps · +${fmt(Math.ceil(reward.oreAmt * (stats.oreMult || 1)))} ${ORES[reward.ore].name.toUpperCase()}`);
+      setText(r.towerBtn, tower.active ? 'LEAVE' : 'ENTER');
+      r.towerBtn.disabled = false;
+    } else {
+      setText(r.towerFloorText, 'SEALED · OPENS AT LV.5');
+      setText(r.towerRewardText, 'Coin, ore and unique vault gear inside');
+      setText(r.towerBtn, 'LV.5');
+      r.towerBtn.disabled = true;
+    }
+
     if (enemy) {
       setText(r.enemyName, enemy.name.toUpperCase());
       r.enemyName.style.color = enemy.boss ? '#ffb15c' : '';
@@ -782,7 +934,7 @@ export class UI {
       name.querySelector('.z-dot').style.boxShadow = unlocked ? `0 0 6px ${z.accent}` : 'none';
       if (unlocked) {
         btn.classList.remove('ready');
-        sub.textContent = `${z.unlock ? `${z.baseHp} HP` : 'STARTING GROUND'} · WAVE ${c.waves[i]} · ~${fmt(z.caps)} caps/kill`;
+        sub.textContent = `${z.unlock ? `${z.baseHp} HP` : 'STARTING GROUND'} · WAVE ${c.waves[i]} · ~${fmt(z.caps)} coins/kill`;
         if (i === c.zone) {
           status.innerHTML = `<b>ACTIVE</b>${z.enemies[0]}`;
           status.classList.add('active-tag');
@@ -795,8 +947,8 @@ export class UI {
         const ready = canAfford(s, { caps: req.caps, ...req.ore });
         btn.classList.toggle('ready', ready);
         status.classList.remove('active-tag');
-        sub.textContent = `${z.baseDmg} DMG · ${fmt(z.caps)} caps/kill · ${ORES[z.ore].name}`;
-        status.innerHTML = ready ? `<b>UNLOCK</b>${fmt(req.caps)} CAPS` : `<b>LOCKED</b>${fmt(req.caps)} CAPS`;
+        sub.textContent = `${z.baseDmg} DMG · ${fmt(z.caps)} coins/kill · ${ORES[z.ore].name}`;
+        status.innerHTML = ready ? `<b>UNLOCK</b>${fmt(req.caps)} COINS` : `<b>LOCKED</b>${fmt(req.caps)} COINS`;
       }
     });
   }
@@ -829,7 +981,7 @@ export class UI {
     if (s.combat.unlocked < 2) return 'Unlock Highway Camp and push deeper into the ruins.';
     if ((s.points || 0) > 0) return `Level ${s.level}: spend ${s.points} attribute point${s.points > 1 ? 's' : ''} in the FORGE.`;
     if ((s.perkPoints || 0) > 0) return 'A perk choice is waiting — open PERKS in the FORGE.';
-    if (s.crew < 1) return 'Recruit a survivor crew to boost every ore source.';
+    if (crewCount(s) < 5) return `Recruit crew in the STORE — ${crewCount(s)}/5 aboard.`;
     if (s.layersUnlocked < LAYERS.length) return `Descend: open ${LAYERS[s.layersUnlocked].name}.`;
     if (s.combat.unlocked < ZONES.length) return `Secure ${ZONES[s.combat.unlocked].name} at the edge of the map.`;
     if (s.combat.primeKills < 1) return 'Reach wave 10 in The Black Vault and kill Warden Prime.';
@@ -863,8 +1015,8 @@ export class UI {
     const rarity = rarityOf(item);
     const equipped = this.s.loadout?.[item.slot] === item.id;
     return `
-      <div class="loot-card rarity-${rarity.id}${equipped ? ' equipped' : ''}" style="--rarity:${rarity.color}">
-        <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span><span class="lc-level">LV.${item.level}</span></div>
+      <div class="loot-card rarity-${rarity.id}${equipped ? ' equipped' : ''}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
+        <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
         <strong class="lc-name">${item.name}</strong>
         <span class="lc-slot">${slot.name}</span>
         <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
@@ -875,49 +1027,257 @@ export class UI {
       </div>`;
   }
 
-  openGear() {
+  /* ── store panel ─────────────────────────────────────────── */
+  buildStore() {
+    // isotope-priced crew chests
+    const chestWrap = $('chestCards');
+    chestWrap.innerHTML = CHESTS.map((chest, i) => `
+      <button class="card chest-card" type="button" data-action="chest" data-index="${i}" id="chest-${chest.id}" style="--cc:${chest.color}" title="${chest.blurb}">
+        <span class="card-icon">${chest.icon}</span>
+        <span class="card-body">
+          <span class="card-top"><span class="card-title">${chest.name}</span><span class="card-lvl" data-tier>${chest.tier}</span></span>
+          <span class="card-desc" data-desc></span>
+          <span class="card-cost" data-cost></span>
+        </span>
+        <span class="card-cta" data-cta>OPEN</span>
+      </button>`).join('');
+    this.chestEls = CHESTS.map((chest) => {
+      const card = $(`chest-${chest.id}`);
+      return {
+        card,
+        desc: card.querySelector('[data-desc]'),
+        cost: card.querySelector('[data-cost]'),
+        cta: card.querySelector('[data-cta]'),
+      };
+    });
+
+    // contracts
+    const taskWrap = $('storeTasks');
+    taskWrap.innerHTML = TASKS.map((task) => `
+      <div class="task-row" data-task="${task.id}" id="task-${task.id}">
+        <div class="task-copy">
+          <strong>${task.name}</strong>
+          <span>${task.desc}</span>
+        </div>
+        <span class="task-progress" data-progress>0 / ${task.goal}</span>
+        <span class="task-pay">+${task.iso} ISO</span>
+        <button class="btn small" type="button" data-action="claim" data-id="${task.id}" data-claim>CLAIM</button>
+      </div>`).join('');
+    this.taskEls = Object.fromEntries(TASKS.map((task) => {
+      const row = $(`task-${task.id}`);
+      return [task.id, { row, progress: row.querySelector('[data-progress]'), claim: row.querySelector('[data-claim]') }];
+    }));
+
+    this.storeOffersEl = $('storeOffers');
+    this.offerSig = null;
+    this.offerEls = [];
+  }
+
+  offerCard(item, index) {
+    const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
+    const rarity = rarityOf(item);
+    const classLabel = item.classId
+      ? (COMBAT_WEAPON_MAP[item.classId]?.name || item.classId.toUpperCase())
+      : '';
+    const price = isoValue(item);
+    return `
+      <div class="loot-card offer-card rarity-${rarity.id}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
+        <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
+        <strong class="lc-name">${item.name}</strong>
+        <span class="lc-slot">${slot.name}${classLabel ? ` · ${classLabel}` : ''}</span>
+        <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
+        <div class="offer-foot">
+          <span class="offer-price">${fmt(price)} ISO</span>
+          <button class="btn small primary" type="button" data-action="storeoffer" data-index="${index}" data-oafford>BUY</button>
+        </div>
+      </div>`;
+  }
+
+  renderStore() {
     const s = this.s;
+    const r = this.refs;
+    const iso = s.iso || 0;
+    setText(r.storeBadge, `ISO ${fmt(iso)}`);
+
+    // chests
+    let unlockedChests = 0;
+    this.chestEls.forEach((els, i) => {
+      const chest = CHESTS[i];
+      const locked = (s.level || 1) < chest.req;
+      if (!locked) unlockedChests += 1;
+      setText(els.desc, locked ? `Opens at Level ${chest.req}` : chest.odds);
+      els.card.title = `${chest.name} — ${chest.blurb} · ${chest.odds}`;
+      els.card.classList.toggle('locked', locked);
+      els.card.classList.toggle('affordable', !locked && iso >= chest.cost);
+      if (locked) {
+        setText(els.cost, `LV.${chest.req} REQUIRED`);
+        setCta(els.cta, 'LOCKED', 'inuse');
+      } else {
+        setText(els.cost, `${fmt(chest.cost)} ISO`);
+        setCta(els.cta, 'OPEN', 'upgrade');
+      }
+    });
+    setText(r.chestSummary, `${unlockedChests} / ${CHESTS.length} UNLOCKED`);
+
+    // anomaly gear offers — rebuild when the stock changes
+    const stock = s.store?.stock || [];
+    const sig = stock.map((item) => item.id).join('|');
+    if (sig !== this.offerSig) {
+      this.offerSig = sig;
+      this.storeOffersEl.innerHTML = stock.length
+        ? stock.map((item, i) => this.offerCard(item, i)).join('')
+        : '<p class="empty-note">The stall is bare — restock it.</p>';
+      this.offerEls = stock.map((item, i) => {
+        const card = this.storeOffersEl.querySelector(`.offer-card[data-card="${i}"]`) || this.storeOffersEl.children[i];
+        return { card, price: card?.querySelector('.offer-price'), buy: card?.querySelector('[data-oafford]') };
+      });
+    }
+    this.offerEls.forEach((els, i) => {
+      const item = stock[i];
+      if (!item) return;
+      const price = isoValue(item);
+      const afford = iso >= price;
+      els.card.classList.toggle('affordable', afford);
+      if (els.buy) els.buy.disabled = !afford;
+      if (els.price) setText(els.price, `${fmt(price)} ISO`);
+    });
+    setText(r.storeStockNote, stock.length ? 'TOP-TIER · ISO ONLY' : 'STALL BARE');
+    if (r.storeRollBtn) {
+      r.storeRollBtn.disabled = iso < STORE_REROLL_COST;
+      setText(r.storeRollBtn, `RESTOCK · ${STORE_REROLL_COST} ISO`);
+      r.storeRollBtn.classList.toggle('affordable', iso >= STORE_REROLL_COST);
+    }
+
+    // contracts
+    const progress = taskProgress(s);
+    for (const task of TASKS) {
+      const els = this.taskEls[task.id];
+      if (!els) continue;
+      const claimed = !!s.tasks[task.id];
+      const value = Math.min(progress[task.metric] || 0, task.goal);
+      const done = value >= task.goal;
+      setText(els.progress, `${value} / ${task.goal}`);
+      els.row.classList.toggle('claimed', claimed);
+      els.row.classList.toggle('done', done && !claimed);
+      els.claim.disabled = !done || claimed;
+      setText(els.claim, claimed ? 'PAID' : 'CLAIM');
+    }
+    setText(r.storeTaskNote, Object.keys(s.tasks).length ? `${Object.keys(s.tasks).length} / ${TASKS.length} CLAIMED` : 'ONE-TIME ISO BOUNTIES');
+  }
+
+  /* ── loadout panel ───────────────────────────────────────── */
+  buildLoadoutPanel() {
+    this.packView = { sort: 'score', slot: 'all', rank: -1, uniqueOnly: false };
+    this.packSig = null;
+    this.slotSig = null;
+
+    // filter chips
+    const slotChips = $('packSlotChips');
+    const slots = [{ id: 'all', label: 'ALL' }, ...GEAR_SLOTS.map((s) => ({ id: s.id, label: s.name })) ];
+    slotChips.innerHTML = slots.map((s) => `<button class="control-chip${s.id === 'all' ? ' active' : ''}" type="button" data-action="packfilter" data-filter="slot" data-value="${s.id}">${s.label}</button>`).join('');
+    const rankChips = $('packRankChips');
+    const ranks = [
+      { id: 'any', label: 'ANY QUALITY', rank: -1, unique: false },
+      { id: 'rare', label: 'RARE+', rank: 2, unique: false },
+      { id: 'epic', label: 'EPIC+', rank: 3, unique: false },
+      { id: 'legendary', label: 'LEGENDARY+', rank: 4, unique: false },
+      { id: 'unique', label: '✦ UNIQUE', rank: -1, unique: true },
+    ];
+    rankChips.innerHTML = ranks.map((rk) => `<button class="control-chip${rk.id === 'any' ? ' active' : ''}" type="button" data-action="packfilter" data-filter="rank" data-value="${rk.id}" data-rank="${rk.rank}" data-unique="${rk.unique}">${rk.label}</button>`).join('');
+
+    $('packSort').addEventListener('change', () => {
+      this.packView.sort = $('packSort').value;
+      this.rebuildPack();
+    });
+
+    this.packGridEl = $('packGrid');
+    this.loadoutSlotsEl = $('loadoutSlots');
+  }
+
+  setPackFilter(target) {
+    if (!target) return;
+    const filter = target.dataset.filter;
+    if (filter === 'slot') this.packView.slot = target.dataset.value;
+    else if (filter === 'rank') {
+      this.packView.rank = Number(target.dataset.rank);
+      this.packView.uniqueOnly = target.dataset.unique === 'true';
+    }
+    document.querySelectorAll(`.control-chip[data-filter="${filter}"]`).forEach((el) => el.classList.toggle('active', el === target));
+    this.rebuildPack();
+  }
+
+  packItems() {
+    const view = this.packView;
+    const items = [...(this.s.inventory || [])];
+    const filtered = items.filter((item) => {
+      if (view.slot !== 'all' && item.slot !== view.slot) return false;
+      if (view.uniqueOnly && !item.unique) return false;
+      if (view.rank >= 0 && rarityOf(item).rank < view.rank) return false;
+      return true;
+    });
+    const cmp = {
+      score: (a, b) => gearScore(b) - gearScore(a),
+      rarity: (a, b) => (rarityOf(b).rank - rarityOf(a).rank) || gearScore(b) - gearScore(a),
+      slot: (a, b) => (a.slot || '').localeCompare(b.slot || '') || gearScore(b) - gearScore(a),
+      class: (a, b) => String(a.classId || a.slot || '').localeCompare(String(b.classId || b.slot || '')) || gearScore(b) - gearScore(a),
+      level: (a, b) => (b.level || 0) - (a.level || 0),
+      name: (a, b) => (a.name || '').localeCompare(b.name || ''),
+    }[view.sort] || null;
+    if (cmp) filtered.sort(cmp);
+    return filtered;
+  }
+
+  rebuildPack() {
+    const items = this.packItems();
+    this.packGridEl.innerHTML = items.length
+      ? items.map((item) => this.lootCard(item)).join('')
+      : '<p class="empty-note">Nothing matches the current filters. Run salvage or kill hostiles to recover gear.</p>';
+  }
+
+  renderLoadoutPanel() {
+    const s = this.s;
+    const r = this.refs;
     const score = this.loadoutScore();
-    const cost = lootRunCost(s);
-    const inventory = s.inventory || [];
-    const pack = inventory.length
-      ? inventory.map((item) => this.lootCard(item)).join('')
-      : '<p class="empty-note">The pack is empty. Run salvage or kill hostiles to recover gear.</p>';
-    const slots = GEAR_SLOTS.map((slot) => this.gearSlotMarkup(slot)).join('');
+
+    // equipped slots (rebuild only when they change)
+    const slotSig = GEAR_SLOTS.map((slot) => `${slot.id}:${s.loadout?.[slot.id] || '-'}`).join('|');
+    const slotsChanged = slotSig !== this.slotSig;
+    if (slotsChanged) {
+      this.slotSig = slotSig;
+      this.loadoutSlotsEl.innerHTML = GEAR_SLOTS.map((slot) => this.gearSlotMarkup(slot)).join('');
+    }
+
+    // fitted bonuses
     const gs = gearStats(s);
     const bonuses = Object.entries(gs)
       .map(([key, value]) => {
-        const label = { damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL', defense: 'DEF', ore: 'ORE', caps: 'CAPS', xp: 'XP', power: 'POWER', yield: 'YIELD', cooldown: 'SWING' }[key] || key.toUpperCase();
+        const label = { damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL', defense: 'DEF', ore: 'ORE', caps: 'COINS', xp: 'XP', power: 'POWER', yield: 'YIELD', cooldown: 'SWING' }[key] || key.toUpperCase();
         const pct = ['damage', 'crit', 'speed', 'defense', 'ore', 'caps', 'xp', 'power', 'yield', 'cooldown'].includes(key);
         return `<span>${label} ${pct ? `+${(value * 100).toFixed(1)}%` : `+${Math.round(value)}`}</span>`;
       })
       .join('');
-    this.openModal({
-      eyebrow: 'SURVIVOR LOADOUT',
-      title: `Gear score ${score}`,
-      kind: 'gear',
-      wide: true,
-      body: `
-        <div class="gear-summary">
-          <div><span>FITTED BONUSES</span><strong>${bonuses || 'No gear fitted'}</strong></div>
-          <div><span>CAPS</span><strong>${fmt(s.caps)}</strong></div>
-        </div>
-        <div class="gear-slots">${slots}</div>
-        <p class="section-label">SALVAGE PACK <span class="label-sub">${inventory.length} / ${MAX_INVENTORY} ITEMS</span></p>
-        <div class="loot-grid">${pack}</div>
-        <div class="loot-run">
-          <div><strong>SALVAGE RUN</strong><span>Spend caps to recover random weapons, tools and armor.</span></div>
-          <button class="btn small primary" type="button" data-action="salvagerun">RUN · ${fmt(cost)} CAPS</button>
-        </div>`,
-      actions: [{ label: 'CLOSE', kind: '' }],
-    });
+    r.bonusSummary.innerHTML = bonuses || 'No gear fitted';
+
+    // salvage pack summary + rebuild when the pack or filters change
+    const inventory = s.inventory || [];
+    setText(r.packBadge, `${inventory.length} / ${MAX_INVENTORY} ITEMS`);
+    setText(r.gearScore, `GEAR ${score}`);
+    setText(r.loadCaps, fmt(s.caps));
+    const runSig = `${inventory.length}|${slotSig}|${this.packView.sort}|${this.packView.slot}|${this.packView.rank}|${this.packView.uniqueOnly}`;
+    if (runSig !== this.packSig) {
+      this.packSig = runSig;
+      this.rebuildPack();
+      const cost = lootRunCost(s);
+      setText(r.salvageCost2, fmt(cost));
+      r.salvageRunBtn2.classList.toggle('affordable', canAfford(s, { caps: cost }));
+    }
   }
 
   openLootResults(items, title = 'Recovered gear') {
     const list = (items || []).filter(Boolean);
     this.lastLoot = { ids: list.map((item) => item.id), title };
     const body = list.length
-      ? `<p>Recovered <strong>${list.length}</strong> item${list.length > 1 ? 's' : ''}. Equip now or scrap for caps.</p>
+      ? `<p>Recovered <strong>${list.length}</strong> item${list.length > 1 ? 's' : ''}. Equip now or scrap for coins.</p>
          <div class="loot-grid">${list.map((item) => this.lootCard(item)).join('')}</div>`
       : '<p>The run came back empty. The wastes keep what they take.</p>';
     this.openModal({
@@ -931,11 +1291,10 @@ export class UI {
   }
 
   refreshOpenGear() {
-    if (this.modalKind === 'gear') {
-      this.openGear();
-    } else if (this.modalKind === 'loot') {
+    if (this.modalKind === 'loot') {
       const ids = this.lastLoot?.ids || [];
       const items = ids.map((id) => this.s.inventory.find((item) => item.id === id)).filter(Boolean);
+      this.packSig = null; // force pack rebuild on the loadout panel
       this.openLootResults(items, this.lastLoot?.title || 'Recovered gear');
     }
   }

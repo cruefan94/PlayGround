@@ -30,7 +30,8 @@
       <div class="resources" id="resources" aria-label="Resources"></div>
 
       <div class="top-actions">
-        <button class="icon-btn gear-open" id="gearBtn" type="button" data-action="gear" aria-label="Open loadout" title="Loadout &amp; loot">⛨</button>
+        <button class="icon-btn iso-btn" id="isoBtn" type="button" data-tab="store" aria-label="Open the store" title="The STORE spends glowing isotopes">☢</button>
+        <button class="icon-btn gear-open" id="gearBtn" type="button" data-tab="loadout" aria-label="Open loadout" title="Loadout &amp; salvage pack">⛨</button>
         <button class="icon-btn" id="soundBtn" type="button" aria-label="Toggle sound" title="Sound">♪</button>
         <button class="icon-btn" id="resetBtn" type="button" aria-label="Reset game" title="Reset game">↺</button>
       </div>
@@ -39,12 +40,15 @@
     <nav class="tabbar" aria-label="Game sections">
       <button type="button" data-tab="mine" class="tab active"><span class="tab-ico">⛏</span>MINE</button>
       <button type="button" data-tab="forge" class="tab"><span class="tab-ico">⚙</span>FORGE</button>
+      <button type="button" data-tab="crew" class="tab"><span class="tab-ico">☗</span>CREW</button>
+      <button type="button" data-tab="store" class="tab"><span class="tab-ico">☢</span>STORE</button>
+      <button type="button" data-tab="loadout" class="tab"><span class="tab-ico">⛨</span>LOADOUT</button>
       <button type="button" data-tab="fight" class="tab"><span class="tab-ico">☠</span>FIGHT</button>
     </nav>
 
     <main class="layout">
       <!-- MINE -->
-      <section class="panel mine-panel" aria-labelledby="mineTitle">
+      <section class="panel mine-panel" data-panel="mine" aria-labelledby="mineTitle">
         <header class="panel-head">
           <div>
             <p class="eyebrow">SECTOR 01 // DIG SITE</p>
@@ -92,13 +96,13 @@
       </section>
 
       <!-- FORGE -->
-      <section class="panel forge-panel" aria-labelledby="forgeTitle">
+      <section class="panel forge-panel" data-panel="forge" aria-labelledby="forgeTitle">
         <header class="panel-head">
           <div>
             <p class="eyebrow">SALVAGE // WORKBENCH</p>
             <h2 id="forgeTitle">THE FORGE</h2>
           </div>
-          <div class="head-badge" id="crewBadge">CREW 0</div>
+          <div class="head-badge" id="crewBadge">CREW 0 / 23</div>
         </header>
 
         <div class="panel-scroll">
@@ -132,9 +136,9 @@
           <p class="section-label">COMBAT WEAPONS <span id="weaponSummary" class="label-sub">1 / 12 READY</span></p>
           <div id="combatWeaponCards" class="card-list equip-list"></div>
 
-          <p class="section-label">LOADOUT <span id="gearScore" class="label-sub">GEAR 0</span></p>
+          <p class="section-label">LOADOUT</p>
           <div class="loadout-strip" id="loadoutStrip"></div>
-          <button class="btn small loot-open-btn" type="button" data-action="gear">OPEN LOADOUT &amp; SALVAGE PACK</button>
+          <button class="btn small loot-open-btn" type="button" data-tab="loadout">OPEN LOADOUT &amp; SALVAGE PACK</button>
 
           <p class="section-label">OUTFITS <span id="outfitSummary" class="label-sub">0 / 3 CRAFTED</span></p>
           <div id="outfitCards" class="card-list"></div>
@@ -150,8 +154,101 @@
         </div>
       </section>
 
+      <!-- CREW -->
+      <section class="panel crew-panel" data-panel="crew" aria-labelledby="crewTitle">
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">RECRUITERS // SUPPLY LINE</p>
+            <h2 id="crewTitle">THE CREW</h2>
+          </div>
+          <div class="head-badge" id="rosterBadge">CREW 0 / 23</div>
+        </header>
+
+        <div class="panel-scroll">
+          <div class="crew-lede" id="crewLede">
+            <strong>PERMANENT CREW</strong>
+            <span>Survivors join through supply chests bought in the <button class="mini-link" type="button" data-tab="store">STORE</button> with glowing isotopes. Every recruit is permanent and every buff stacks — class 1 (COMMON) up to class 5 (TRUE SURVIVOR). Duplicate crew convert into coins.</span>
+          </div>
+          <p class="section-label">ACTIVE CREW BUFFS <span class="label-sub" id="buffEmptyNote">none yet</span></p>
+          <div class="crew-buffs" id="crewBuffChips"></div>
+          <p class="section-label">ROSTER <span class="label-sub" id="rosterCount">0 RECRUITED</span></p>
+          <div id="crewRoster" class="crew-grid"></div>
+        </div>
+      </section>
+
+      <!-- STORE -->
+      <section class="panel store-panel" data-panel="store" aria-labelledby="storeTitle">
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">REQUISITIONS // BLACK MARKET</p>
+            <h2 id="storeTitle">THE STORE</h2>
+          </div>
+          <div class="head-badge iso-badge" id="storeBadge">ISO 0</div>
+        </header>
+
+        <div class="panel-scroll">
+          <div class="crew-lede store-lede">
+            <strong>GLOWING GREEN ISOTOPES</strong>
+            <span>Earned from every boss fight each 10 rounds in fight mode, every 10th tower floor and one-time contracts. Chests and top-tier gear are bought here — coins never work.</span>
+          </div>
+          <p class="section-label">SUPPLY CHESTS <span class="label-sub" id="chestSummary">5 LOCKED ON SHIFT</span></p>
+          <div id="chestCards" class="card-list"></div>
+          <p class="section-label">ANOMALY GEAR <span class="label-sub" id="storeStockNote">TOP-TIER OFFERS</span></p>
+          <div id="storeOffers" class="store-offers"></div>
+          <div class="store-reroll">
+            <span>The stall always carries a unique or legendary piece and refills as you buy. Force new stock any time.</span>
+            <button class="btn small" id="storeRollBtn" type="button" data-action="storeroll">RESTOCK · 3 ISO</button>
+          </div>
+          <p class="section-label">CONTRACTS <span class="label-sub" id="storeTaskNote">ONE-TIME ISO BOUNTIES</span></p>
+          <div id="storeTasks" class="task-list"></div>
+        </div>
+      </section>
+
+      <!-- LOADOUT -->
+      <section class="panel loadout-panel" data-panel="loadout" aria-labelledby="loadoutTitle">
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">SURVIVOR LOADOUT</p>
+            <h2 id="loadoutTitle">GEAR &amp; PACK</h2>
+          </div>
+          <div class="head-badge" id="packBadge">0 / 30 ITEMS</div>
+        </header>
+
+        <div class="panel-scroll">
+          <p class="section-label">FITTED GEAR <span class="label-sub" id="gearScore">GEAR 0</span></p>
+          <div id="loadoutSlots" class="gear-slots"></div>
+          <p class="section-label">FITTED BONUSES</p>
+          <div class="gear-summary">
+            <div><span>BONUSES</span><strong id="bonusSummary">No gear fitted</strong></div>
+            <div><span>COINS</span><strong id="loadCaps">0</strong></div>
+          </div>
+          <p class="section-label">SALVAGE PACK</p>
+          <div class="gear-controls">
+            <div class="control-chips" id="packSlotChips" data-filter="slot"></div>
+            <div class="control-chips" id="packRankChips" data-filter="rank"></div>
+            <div class="control-sort">
+              <span class="sort-label">SORT</span>
+              <select id="packSort" class="select-mono" aria-label="Sort salvage pack">
+                <option value="score">GEAR SCORE</option>
+                <option value="rarity">QUALITY</option>
+                <option value="slot">TYPE</option>
+                <option value="class">CLASS</option>
+                <option value="level">LEVEL</option>
+                <option value="name">NAME</option>
+              </select>
+              <button class="btn small" id="autosortBtn" type="button" data-action="autosort">AUTOSORT</button>
+            </div>
+          </div>
+          <div id="packGrid" class="loot-grid"></div>
+          <div class="loot-run">
+            <div><strong>SALVAGE RUN</strong><span>Spend coins to recover random weapons, tools and armor.</span></div>
+            <button class="btn small primary" id="salvageRunBtn2" type="button" data-action="salvagerun">RUN · <span id="salvageCost2">0</span></button>
+          </div>
+        </div>
+      </section>
+
       <!-- FIGHT -->
-      <section class="panel fight-panel" aria-labelledby="fightTitle">
+      <section class="panel fight-panel" data-panel="fight" aria-labelledby="fightTitle">
         <header class="panel-head">
           <div>
             <p class="eyebrow">HOSTILE TERRITORY</p>
@@ -199,12 +296,21 @@
           </div>
         </div>
 
+        <div class="tower-strip" id="towerStrip" aria-label="Ascent Tower">
+          <div class="tower-copy">
+            <strong>ASCENT TOWER</strong>
+            <span id="towerFloorText">FLOOR 1 · BEST —</span>
+          </div>
+          <div class="tower-reward" id="towerRewardText">—</div>
+          <button class="btn small primary tower-btn" id="towerBtn" type="button" data-action="tower">ENTER</button>
+        </div>
+
         <div class="salvage-bar">
           <div class="salvage-copy">
             <span>SALVAGE PACK</span>
             <strong id="packSummary">0 / 30 · GEAR 0</strong>
           </div>
-          <button class="btn small" type="button" data-action="gear">LOADOUT</button>
+          <button class="btn small" type="button" data-tab="loadout">LOADOUT</button>
           <button class="btn small primary" id="salvageRunBtn" type="button" data-action="salvagerun">RUN · <span id="salvageCost">0</span></button>
         </div>
 
