@@ -3,7 +3,7 @@ import {
   MINING_TOOLS, COMBAT_WEAPONS, GEAR_SLOTS, MAX_INVENTORY, RARITIES,
   CREW_POOL, CREW_CLASSES, CREW_CLASS_MAP, CREW_COUNT, crewCount, CHESTS, crewBonus,
   TASKS, TASK_MAP, taskProgress, isoValue, STORE_REROLL_COST, STORE_STOCK_SIZE,
-  fmt, costLabel, canAfford, spend, makeEnemy, playerStats,
+  fmt, costLabel, canAfford, spend, layerUnlockFail, makeEnemy, playerStats,
   playerAttackInterval, layerMaxHp, strikeYield, pickPower, miningTool, combatWeapon, toolCooldown,
   drillRate, salvageCapsRate, overloadGain, xpNeeded, xpMultiplier, outfitCost, outfitLevel,
   attrLevel, perkRank, pickaxeCost, drillCost, towerUnlock, makeTowerEnemy, towerReward,
@@ -376,13 +376,9 @@ class Game {
     }
     const layer = LAYERS[index];
     const req = layer.unlock;
-    if (s.pickaxe < req.pickaxe) {
-      this.ui.toast(`Requires pickaxe Lv.${req.pickaxe}. You have Lv.${s.pickaxe}.`, 'bad');
-      this.audio.error();
-      return;
-    }
-    if (!canAfford(s, req.ore)) {
-      this.ui.toast(`Need ${costLabel(req.ore)} to break through.`, 'bad');
+    const fail = layerUnlockFail(s, index);
+    if (fail.length) {
+      this.ui.toast(`${layer.short} LOCKED · needs ${fail.join(' · ')}`, 'bad');
       this.audio.error();
       return;
     }

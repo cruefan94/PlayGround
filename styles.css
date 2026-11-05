@@ -729,7 +729,15 @@ svg { display: block; }
   letter-spacing: .02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.layer-btn.locked { opacity: .6; }
+.layer-btn.locked { opacity: .72; flex-basis: 118px; }
+.layer-btn.locked .l-req { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.6; }
+.layer-btn.locked .l-req b {
+  color: #8d917f; font-weight: normal; margin-right: 5px;
+  padding: 0 3px; border: 1px solid #4a4f3f; border-radius: 2px;
+}
+.layer-btn.locked .l-req u {
+  display: block; text-decoration: none; color: #b0a374;
+}
 .layer-btn.ready { opacity: 1; border-color: var(--toxic-dim); }
 .layer-btn.ready .l-req { color: var(--toxic); }
 .layer-btn.locked .l-name { color: #8b9084; }

@@ -2,7 +2,7 @@ import {
   ORES, ORE_ORDER, LAYERS, ZONES, STIM_MAX, OUTFITS, ATTRIBUTES, PERKS,
   MINING_TOOLS, COMBAT_WEAPONS, COMBAT_WEAPON_MAP, GEAR_SLOTS, MAX_INVENTORY,
   CHESTS, CREW_POOL, CREW_CLASSES, CREW_CLASS_MAP, CREW_COUNT, crewCount, crewBonus,
-  CLASS_RANK_MAP, classTierRank, tierLabel,
+  CLASS_RANK_MAP, classTierRank, tierLabel, layerUnlockFail,
   TASKS, taskProgress, isoValue, STORE_REROLL_COST,
   towerUnlock, towerReward,
   fmt, fmtRate, costLabel, canAfford, pickPower, pickaxeCost,
@@ -553,16 +553,22 @@ export class UI {
       const unlock = l.unlock;
       let ready = false;
       if (!unlocked && unlock) {
-        ready = s.pickaxe >= unlock.pickaxe && canAffordOre(s, unlock.ore);
+        ready = layerUnlockFail(s, i).length === 0;
       }
       btn.classList.toggle('ready', ready);
       if (unlocked) {
         const rate = (s.drills[i] || 0) * drillRate(s, i);
         setText(req, `${l.baseYield}/hit${rate > 0 ? ` · +${fmtRate(rate)}` : ''}`);
       } else if (ready) {
-        setText(req, `UNLOCK · ${costLabel(unlock.ore)}`);
+        setText(req, `OPEN · ${costLabel(unlock.ore)}`);
       } else {
-        setText(req, `PK.${unlock.pickaxe} · ${costLabel(unlock.ore)}`);
+        // stacked criteria: survivor level, pickaxe, combat record, ore toll
+        const gates = [];
+        if (unlock.level) gates.push(`LV.${unlock.level}`);
+        if (unlock.pickaxe) gates.push(`PK.${unlock.pickaxe}`);
+        if (unlock.kills) gates.push(`${unlock.kills} KILLS`);
+        if (unlock.bossKills) gates.push(`${unlock.bossKills} BOSSES`);
+        req.innerHTML = `${gates.map((line) => `<b>${line}</b>`).join(' ')}<u>${costLabel(unlock.ore)}</u>`;
       }
     });
   }
@@ -1375,10 +1381,6 @@ export class UI {
     modal.hidden = true;
     this.modalKind = null;
   }
-}
-
-function canAffordOre(state, oreCost) {
-  return Object.entries(oreCost).every(([k, v]) => (state.ores[k] || 0) >= v);
 }
 
 /* Colour-codes the action box in the Forge: EQUIP / IN USE / UNLOCK / UPGRADE. */
