@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#11170f">
+  <meta name="description" content="Firebase Raven — a turn-based tactical defence set during the 1968 Vietnam War. Command a US platoon, call in artillery and air support, and hold the firebase until relief arrives.">
+  <title>Firebase Raven — Vietnam '68</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23131910'/%3E%3Cpath d='M32 8l20 10v16c0 12-9 19-20 23-11-4-20-11-20-23V18z' fill='%233b4a32' stroke='%23d7bd77' stroke-width='2'/%3E%3Cpath d='M32 20l4 9 10 1-8 6 3 10-9-5-9 5 3-10-8-6 10-1z' fill='%23ddc17e'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app is-briefing" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img">
+            <path d="M32 5l22 11v18c0 13-10 21-22 26C20 55 10 47 10 34V16z" fill="#2b3525" stroke="#d7bd77" stroke-width="1.6"/>
+            <path d="M32 17l4.2 9.4 10.3 1-7.8 6.4 2.6 10.1L32 39l-9.3 4.9 2.6-10.1-7.8-6.4 10.3-1z" fill="#d8be7b"/>
+            <path d="M18 48l28-28" stroke="#6e7c55" stroke-width="1"/>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <h1>FIREBASE RAVEN</h1>
+          <p>QUANG TRI PROVINCE <span>·</span> 31 JAN 1968</p>
+        </div>
+      </div>
+
+      <div class="hud-strip" aria-label="Mission status">
+        <div class="hud-cell">
+          <span>TURN</span>
+          <strong id="hud-turn">01<span>/10</span></strong>
+        </div>
+        <div class="hud-cell">
+          <span>PHASE</span>
+          <strong id="hud-phase" class="phase-briefing">BRIEFING</strong>
+        </div>
+        <div class="hud-cell">
+          <span>COMMAND</span>
+          <strong id="hud-cp">4 CP</strong>
+        </div>
+        <div class="hud-cell">
+          <span>BUNKER</span>
+          <strong id="hud-bunker">18/18</strong>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button class="icon-btn mobile-only" id="btn-units-mobile" aria-label="Open order of battle" title="Order of battle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="7" cy="6" r="1.6" fill="currentColor"/><circle cx="7" cy="12" r="1.6" fill="currentColor"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/></svg>
+        </button>
+        <button class="icon-btn mobile-only" id="btn-log-mobile" aria-label="Open situation report" title="Situation report">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn sound-btn" id="btn-sound" aria-label="Mute sound" title="Sound">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>SOUND ON</span>
+        </button>
+        <button class="text-btn" id="btn-manual">
+          <span>FIELD MANUAL</span>
+        </button>
+        <button class="text-btn danger" id="btn-restart">
+          <span>REDEPLOY</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="panel roster" id="roster-panel" aria-label="Order of battle">
+        <div class="panel-head">
+          <span class="eyebrow">ORDER OF BATTLE</span>
+          <button class="drawer-close" data-close-drawer aria-label="Close order of battle">×</button>
+        </div>
+        <div class="force-title">
+          <b>TASK FORCE RAVEN</b>
+          <span>1st Platoon · Firebase Raven</span>
+        </div>
+        <div class="unit-list" id="unit-list"></div>
+        <div class="cp-block">
+          <div class="cp-row"><span>COMMAND POINTS</span><strong id="cp-value">4</strong></div>
+          <div class="cp-pips" id="cp-pips"></div>
+          <p>+2 at the start of each turn · cap 12</p>
+        </div>
+        <div class="roster-foot">
+          <span class="eyebrow">ON CALL</span>
+          <div class="oncall"><b>105mm</b><span>M101A1 battery</span></div>
+          <div class="oncall"><b>UH-1B</b><span>Gunship / medevac</span></div>
+          <div class="equipment">M16A1 · M60 · M79 · M48A3 · M113 ACAV</div>
+        </div>
+      </aside>
+
+      <section class="center" aria-label="Tactical map and controls">
+        <div class="board-wrap" id="board-wrap">
+          <canvas id="board" tabindex="0" aria-label="Top-down tactical map of Firebase Raven. Select a unit, then click a highlighted hex to move or an enemy to fire."></canvas>
+          <div class="scanlines" aria-hidden="true"></div>
+          <div class="board-hud board-topleft">
+            <div class="objective-chip">
+              <span class="objective-icon" aria-hidden="true">◆</span>
+              <div>
+                <b>HOLD FIREBASE RAVEN</b>
+                <small id="objective-sub">Relief arrives in 10 turns</small>
+              </div>
+            </div>
+          </div>
+          <div class="board-hud board-topright">
+            <div class="map-stamp">
+              <span>AO QUANG TRI</span>
+              <b>I CORPS · 1968</b>
+            </div>
+          </div>
+          <div class="board-hud board-bottomleft legend">
+            <span><i class="dot us"></i>FRIENDLY</span>
+            <span><i class="dot nva"></i>ENEMY</span>
+            <span><i class="shield"></i>COVER</span>
+            <span class="legend-hint">SELECT · MOVE · FIRE</span>
+          </div>
+          <div class="target-prompt hidden" id="target-prompt">
+            <span id="target-text">Select a target hex</span>
+            <button id="btn-cancel-target">CANCEL <kbd>ESC</kbd></button>
+          </div>
+          <div class="turn-banner hidden" id="turn-banner"><span>TURN 01 / 10</span><strong>HOLD THE PERIMETER</strong></div>
+          <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+          <div class="tooltip hidden" id="tooltip" role="tooltip"></div>
+        </div>
+
+        <div class="actionbar">
+          <div class="selection-card" id="selection-card">
+            <div class="sel-empty" id="sel-empty">
+              <span class="eyebrow">TACTICAL CONTROL</span>
+              <p>Select a unit on the map or in the order of battle.</p>
+            </div>
+            <div class="sel-content hidden" id="sel-content">
+              <img id="sel-portrait" alt="" draggable="false">
+              <div class="sel-copy">
+                <div class="sel-title"><strong id="sel-name"></strong><span id="sel-weapon"></span></div>
+                <div class="sel-stats" id="sel-stats"></div>
+                <div class="hp-line">
+                  <div class="hp-track"><div id="sel-hpfill"></div></div>
+                  <span id="sel-hp"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="support-bar" id="support-bar" aria-label="Support missions">
+            <button class="support-btn" data-support="artillery" aria-pressed="false" title="105mm fire mission">
+              <span class="sb-icon">105</span>
+              <span class="sb-copy"><b>105mm</b><small>FIRE MISSION</small></span>
+              <em>2 CP · 3</em>
+            </button>
+            <button class="support-btn" data-support="huey" aria-pressed="false" title="UH-1B gunship">
+              <span class="sb-icon">UH</span>
+              <span class="sb-copy"><b>HUEY</b><small>GUNSHIP RUN</small></span>
+              <em>2 CP · 2</em>
+            </button>
+            <button class="support-btn" data-support="dustoff" aria-pressed="false" title="Dustoff medevac">
+              <span class="sb-icon">✚</span>
+              <span class="sb-copy"><b>DUSTOFF</b><small>MEDEVAC</small></span>
+              <em>1 CP · 2</em>
+            </button>
+          </div>
+
+          <button class="end-turn" id="btn-end-turn">
+            <span class="end-turn-label">END TURN</span>
+            <span class="end-turn-sub" id="end-turn-sub">5 UNITS READY</span>
+          </button>
+        </div>
+
+        <div class="unit-strip" id="unit-strip" aria-label="Unit quick select"></div>
+      </section>
+
+      <aside class="panel sitrep" id="sitrep-panel" aria-label="Situation report">
+        <div class="panel-head">
+          <span class="eyebrow">SITUATION REPORT</span>
+          <button class="drawer-close" data-close-drawer aria-label="Close situation report">×</button>
+        </div>
+        <div class="mission-card">
+          <div class="mission-row"><span>MISSION</span><strong>HOLD UNTIL RELIEF</strong></div>
+          <div class="mission-row"><span>RELIEF IN</span><strong id="relief-turns">10 TURNS</strong></div>
+          <div class="mission-row"><span>BUNKER</span><strong id="bunker-status">NOMINAL</strong></div>
+          <div class="mission-progress"><div id="mission-progress-fill"></div></div>
+          <p>Hold the command bunker. If it falls — or the platoon is destroyed — the firebase is lost.</p>
+        </div>
+        <div class="next-wave">
+          <div class="eyebrow">NEXT ENEMY MOVEMENT</div>
+          <div id="next-wave-content" class="next-wave-content"></div>
+        </div>
+        <div class="log-head"><span class="eyebrow">FIELD LOG</span><span id="log-count">00</span></div>
+        <div class="log" id="log" aria-live="polite"></div>
+        <div class="score-strip">
+          <span>ENEMY LOSSES <b id="stat-kills">0</b></span>
+          <span>FRIENDLY <b id="stat-losses">0</b></span>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Mission briefing                                                    -->
+  <!-- ================================================================== -->
+  <div class="overlay briefing-overlay" id="start-modal">
+    <div class="briefing-shell">
+      <div class="briefing-topline">
+        <span>TOP SECRET</span>
+        <span>OPERATION CEDAR RAVEN</span>
+        <span>I CORPS · 1968</span>
+      </div>
+      <div class="briefing-grid">
+        <div class="briefing-hero">
+          <div class="brief-seal" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(215,189,119,.4)" stroke-width="1"/>
+              <circle cx="60" cy="60" r="47" fill="none" stroke="rgba(215,189,119,.2)" stroke-width="1" stroke-dasharray="3 4"/>
+              <path d="M60 16l12 27 29 3-22 19 7 29-26-15-26 15 7-29-22-19 29-3z" fill="rgba(215,189,119,.13)" stroke="rgba(215,189,119,.55)" stroke-width="1.3"/>
+              <text x="60" y="66" text-anchor="middle" font-family="Courier New" font-size="12" letter-spacing="2" fill="rgba(230,210,152,.78)">R6</text>
+            </svg>
+          </div>
+          <p class="kicker">A TURN-BASED DEFENCE OF</p>
+          <h2>FIREBASE<br><em>RAVEN</em></h2>
+          <p class="location">QUANG TRI PROVINCE · REPUBLIC OF VIETNAM<br>04:40 HOURS · 31 JANUARY 1968</p>
+          <blockquote>“The valley belongs to no one. Hold the wire until first light.”</blockquote>
+          <button class="start-btn" id="btn-start">Start Game</button>
+          <div class="briefing-actions">
+            <button id="btn-brief-manual">FIELD MANUAL</button>
+            <span>10 TURNS · 15–20 MIN</span>
+          </div>
+        </div>
+
+        <div class="briefing-brief">
+          <h3>MISSION BRIEF</h3>
+          <p class="brief-lead">At 04:40, forward observers report NVA and Viet Cong elements moving through Ban Doc village toward Firebase Raven. Your platoon holds the firebase and its command bunker. The relief column is ten turns out.</p>
+          <p>Hold the bunker until relief arrives. Trade ground for time when you must. Use prepared positions, machine-gun suppression, armour, and the 105mm battery to break each assault before it reaches the wire.</p>
+          <div class="brief-cols">
+            <div>
+              <h4>FRIENDLY FORCES</h4>
+              <ul>
+                <li><b>Alpha</b> — M16A1 rifle squad</li>
+                <li><b>Bravo</b> — M60 machine-gun team</li>
+                <li><b>Delta</b> — M79 grenadier team</li>
+                <li><b>Ironhide</b> — M48A3 Patton</li>
+                <li><b>Tracker</b> — M113 ACAV</li>
+                <li><b>Raven 6</b> — command bunker</li>
+              </ul>
+            </div>
+            <div>
+              <h4>ENEMY INTEL</h4>
+              <ul>
+                <li>VC sappers and NVA rifle squads</li>
+                <li>RPG-2 anti-armour teams</li>
+                <li>82mm mortar teams</li>
+                <li>PT-76 amphibious tanks</li>
+                <li>Battalion command element</li>
+                <li>Reinforcements from east and north</li>
+              </ul>
+            </div>
+          </div>
+          <div class="brief-note">
+            <span>NOTE</span>
+            <p>Equipment and organisations are modelled on period references. The engagement is fictional. Abstract counters — no graphic violence.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Field manual                                                        -->
+  <!-- ================================================================== -->
+  <div class="overlay modal-overlay hidden" id="manual-modal">
+    <div class="modal manual" role="dialog" aria-modal="true" aria-labelledby="manual-title">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow">Raven 6 · Pocket Reference</span>
+          <h2 id="manual-title">FIELD MANUAL</h2>
+        </div>
+        <button class="close-btn" data-close-manual aria-label="Close field manual">×</button>
+      </div>
+      <div class="manual-body">
+        <section class="manual-section">
+          <h3>HOW TO FIGHT</h3>
+          <div class="rule-grid">
+            <div><b>01 · SELECT</b><p>Click a friendly unit on the map, in the order of battle, or use keys <kbd>1</kbd>–<kbd>6</kbd>.</p></div>
+            <div><b>02 · MOVE</b><p>Green hexes are reachable. Terrain costs vary; jungle and hills slow movement, paddies expose you.</p></div>
+            <div><b>03 · FIRE</b><p>Click an enemy inside your range. Firing ends the unit's action. Moved units may still fire; units that fire cannot move.</p></div>
+            <div><b>04 · END TURN</b><p>Press <kbd>E</kbd> or END TURN. Every surviving enemy then moves and fires. Hold for ten turns.</p></div>
+          </div>
+        </section>
+
+        <section class="manual-section">
+          <h3>COMBAT NOTES</h3>
+          <div class="rule-grid three">
+            <div><b>COVER</b><p>Jungle, villages and the firebase give +2 cover. Hills and elephant grass give +1. Cover reduces incoming damage. The bunker has reinforced cover.</p></div>
+            <div><b>SUPPRESSION</b><p>M60, M2, mortar and air attacks pin targets. Pinned units lose movement and firepower for one activation. Watch for the amber warning.</p></div>
+            <div><b>SUPPORT</b><p>105mm fire damages a hex and its neighbours — including friendlies. Huey runs hit and pin enemies only. Dustoff restores 7 HP.</p></div>
+          </div>
+        </section>
+
+        <section class="manual-section">
+          <h3>ORDER OF BATTLE</h3>
+          <div class="dossier-grid">
+            <article><img src="js/../" alt="" class="hidden"><h4>ALPHA SQUAD</h4><p class="dossier-weapon">M16A1 · 5.56mm</p><dl><dt>HP</dt><dd>12</dd><dt>Fire</dt><dd>6 soft / 2 armour</dd><dt>Range</dt><dd>1</dd><dt>Move</dt><dd>2</dd></dl><p>Close-range rifle squad. Cheap, flexible, and best kept behind cover.</p></article>
+            <article><h4>BRAVO SQUAD</h4><p class="dossier-weapon">M60 · 7.62mm</p><dl><dt>HP</dt><dd>12</dd><dt>Fire</dt><dd>5 soft / 2 armour</dd><dt>Range</dt><dd>2</dd><dt>Move</dt><dd>1</dd></dl><p>Machine-gun team. Suppresses whatever it hits; excellent from the firebase.</p></article>
+            <article><h4>DELTA SQUAD</h4><p class="dossier-weapon">M79 · 40mm</p><dl><dt>HP</dt><dd>12</dd><dt>Fire</dt><dd>7 soft / 3 armour</dd><dt>Range</dt><dd>2</dd><dt>Move</dt><dd>2</dd></dl><p>Grenadier team. Splash damage punishes enemies stacked around a village or bridge.</p></article>
+            <article><h4>M48A3 PATTON</h4><p class="dossier-weapon">90mm M41</p><dl><dt>HP</dt><dd>20</dd><dt>Fire</dt><dd>7 soft / 10 armour</dd><dt>Range</dt><dd>2</dd><dt>Move</dt><dd>3</dd></dl><p>Armour 2. The decisive answer to PT-76s — and the priority target for RPG teams.</p></article>
+            <article><h4>M113 ACAV</h4><p class="dossier-weapon">M2 · .50 cal</p><dl><dt>HP</dt><dd>16</dd><dt>Fire</dt><dd>6 soft / 4 armour</dd><dt>Range</dt><dd>2</dd><dt>Move</dt><dd>4</dd></dl><p>Armour 1. Fast flanker and suppressor. Do not leave it alone in RPG range.</p></article>
+            <article><h4>COMMAND BUNKER</h4><p class="dossier-weapon">Raven 6</p><dl><dt>HP</dt><dd>18</dd><dt>Armour</dt><dd>2</dd><dt>Cover</dt><dd>+3</dd><dt>Move</dt><dd>—</dd></dl><p>The objective. It cannot move or fire. If it is destroyed, the operation fails.</p></article>
+          </div>
+        </section>
+
+        <section class="manual-section">
+          <h3>PERIOD EQUIPMENT</h3>
+          <div class="equipment-grid">
+            <div><b>UNITED STATES / ARVN</b><p>M16A1 rifle · M60 general-purpose machine gun · M79 grenade launcher · M48A3 Patton medium tank · M113 armoured cavalry assault vehicle · M101A1 105mm howitzer · UH-1B Huey gunship · UH-1D Dustoff.</p></div>
+            <div><b>NVA / VIET CONG</b><p>AK-47 rifle · RPD light machine gun · RPG-2 anti-tank rocket · PT-76 amphibious light tank · 82mm mortar · satchel charges · battalion radio nets.</p></div>
+          </div>
+          <p class="manual-disclaimer">The firebase, village, callsigns, and course of this engagement are fictional. This is a small abstract strategy game about command decisions, not a simulation of a specific historical action. No graphic violence is depicted.</p>
+        </section>
+
+        <section class="manual-section shortcuts">
+          <h3>KEYBOARD</h3>
+          <p><kbd>1</kbd>–<kbd>6</kbd> select unit · <kbd>A</kbd> artillery · <kbd>H</kbd> Huey · <kbd>M</kbd> medevac · <kbd>E</kbd> end turn · <kbd>ESC</kbd> cancel</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Result                                                              -->
+  <!-- ================================================================== -->
+  <div class="overlay modal-overlay hidden" id="result-modal">
+    <div class="modal result-shell" role="dialog" aria-modal="true" aria-labelledby="result-title">
+      <div class="result-top">
+        <span class="result-kicker">MISSION ACCOMPLISHED</span>
+        <span class="result-grade">A</span>
+      </div>
+      <h2 id="result-title" class="result-title">FIREBASE HELD</h2>
+      <p class="result-reason">The relief column reached Firebase Raven at first light.</p>
+      <div class="result-numbers">
+        <span>FINAL SCORE <b class="result-score">0</b></span>
+        <span class="result-best">BEST 0</span>
+      </div>
+      <div class="result-stats"></div>
+      <div class="result-actions">
+        <button class="start-btn small" id="btn-result-restart">Redeploy</button>
+        <button class="text-btn" data-close-result>Review the map</button>
+      </div>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="noscript">Firebase Raven needs JavaScript enabled to run.</div>
+  </noscript>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
