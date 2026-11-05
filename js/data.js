@@ -759,35 +759,35 @@ export const LAYERS = [
   {
     id: 'flats', name: 'Rust Flats', short: 'RUST FLATS', ore: 'iron',
     hp: 52, baseYield: 2, depth: 84,
-    unlock: { pickaxe: 3, ore: { scrap: 200 } },
+    unlock: { level: 3, pickaxe: 3, kills: 8, ore: { scrap: 300 } },
     blurb: 'A sea of oxidized husks. The iron still holds.',
     cave: '#33231a', glow: '#c97a52',
   },
   {
     id: 'foundry', name: 'Toxic Foundry', short: 'FOUNDRY', ore: 'copper',
     hp: 128, baseYield: 5, depth: 210,
-    unlock: { pickaxe: 6, ore: { iron: 220 } },
+    unlock: { level: 6, pickaxe: 6, kills: 25, bossKills: 2, ore: { scrap: 600, iron: 400 } },
     blurb: 'Green runoff, live cables, and miles of copper spine.',
     cave: '#1f2b1c', glow: '#e88a3c',
   },
   {
     id: 'crater', name: 'Glassed Crater', short: 'CRATER', ore: 'titanium',
     hp: 300, baseYield: 12, depth: 480,
-    unlock: { pickaxe: 10, ore: { copper: 450 } },
+    unlock: { level: 10, pickaxe: 10, kills: 60, bossKills: 6, ore: { iron: 700, copper: 900 } },
     blurb: 'The impact fused the earth into glass. Something glitters beneath.',
     cave: '#182a2b', glow: '#6fd8dc',
   },
   {
     id: 'reactor', name: 'Reactor Depths', short: 'DEPTHS', ore: 'uranium',
     hp: 620, baseYield: 26, depth: 910,
-    unlock: { pickaxe: 15, ore: { titanium: 400 } },
+    unlock: { level: 15, pickaxe: 15, kills: 150, bossKills: 12, ore: { copper: 1200, titanium: 950 } },
     blurb: 'The old reactor never died. It only went quiet.',
     cave: '#242b14', glow: '#b7ee58',
   },
   {
     id: 'vault', name: 'The Black Vault', short: 'VAULT', ore: 'singularity',
     hp: 1200, baseYield: 60, depth: 1600,
-    unlock: { pickaxe: 22, ore: { uranium: 650 } },
+    unlock: { level: 20, pickaxe: 22, kills: 400, bossKills: 20, ore: { titanium: 2500, uranium: 1500 } },
     blurb: 'Below the reactor, a door that was never meant to open.',
     cave: '#251d2e', glow: '#b98aff',
   },
@@ -1048,6 +1048,20 @@ export function fmtRate(n) {
   if (n === 0) return '0.00/s';
   if (n < 1) return `${n.toFixed(2)}/s`;
   return `${fmt(n, 1)}/s`;
+}
+
+export function layerUnlockFail(state, index) {
+  const layer = LAYERS[index];
+  const req = layer?.unlock || null;
+  if (!req) return [];
+  const stats = state?.stats || {};
+  const fail = [];
+  if (req.level && (state?.level || 1) < req.level) fail.push(`LV.${req.level}`);
+  if (req.pickaxe && (state?.pickaxe || 1) < req.pickaxe) fail.push(`PK.${req.pickaxe}`);
+  if (req.kills && (stats.kills || 0) < req.kills) fail.push(`${req.kills} KILLS`);
+  if (req.bossKills && (stats.bossKills || 0) < req.bossKills) fail.push(`${req.bossKills} BOSSES`);
+  if (req.ore && !canAfford(state, req.ore)) fail.push(costLabel(req.ore));
+  return fail;
 }
 
 export function costLabel(cost) {
