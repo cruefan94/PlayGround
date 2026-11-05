@@ -573,7 +573,8 @@ export class UI {
     for (const weapon of COMBAT_WEAPONS) {
       const els = this.weaponCardEls[weapon.id];
       const unlocked = !!s.weapons?.[weapon.id];
-      const equipped = s.equippedWeapon === weapon.id;
+      const lootWeapon = equippedItem(s, 'weapon');
+      const equipped = !lootWeapon && s.equippedWeapon === weapon.id;
       const swing = Math.max(220, Math.round((750 * weapon.speedMult) / (p.speedMult || 1)));
       const crit = Math.max(0, p.crit - equippedWeapon.critBonus + weapon.critBonus);
       els.desc.textContent = `DMG ×${weapon.damageMult.toFixed(2)} · ${(swing / 1000).toFixed(2)}s swing · ${Math.round(crit * 100)}% crit`;
@@ -619,7 +620,7 @@ export class UI {
     const stim = this.cardEls.stim;
     stim.lvl.textContent = `LV.${s.combat.gear.stim}`;
     if (stimMax) {
-      stim.desc.innerHTML = `Heals <b>${p.healPerKill}</b> HP per kill · knockout ${p.deathMs / 1000}s`;
+      stim.desc.innerHTML = `Heals <b>${p.healPerKill}</b> HP per kill · knockout 5.0s`;
       stim.cost.textContent = 'Max tier reached';
       stim.card.classList.remove('affordable');
       stim.card.classList.add('maxed');
@@ -627,7 +628,7 @@ export class UI {
     } else {
       const sc = stimCost(s.combat.gear.stim);
       const sAff = canAfford(s, sc);
-      stim.desc.innerHTML = `Heals <b>${p.healPerKill}</b> → <b>${8 + 5 * (s.combat.gear.stim + 1)}</b> HP per kill · faster reboot`;
+      stim.desc.innerHTML = `Heals <b>${p.healPerKill}</b> → <b>${8 + 5 * (s.combat.gear.stim + 1)}</b> HP per kill · knockout 5.0s`;
       stim.cost.textContent = costLabel(sc);
       stim.card.classList.toggle('affordable', sAff);
       stim.card.classList.remove('maxed');
@@ -846,13 +847,14 @@ export class UI {
         </div>`;
     }
     const rarity = rarityOf(item);
+    const inHand = item.slot === 'weapon' || item.slot === 'tool';
     return `
       <div class="gear-slot filled" style="--rarity:${rarity.color}">
         <span class="gs-icon">${slot.icon}</span>
         <span class="gs-body">
           <span class="gs-slot">${slot.name} · <em style="color:${rarity.color}">${rarity.name}</em></span>
           <strong>${item.name}</strong>
-          <small>${gearStatLines(item).join(' · ')}</small>
+          <small>${gearStatLines(item).join(' · ')}${inHand ? ' · <span class="gs-active">IN HAND · DRIVES THE FIGHTER</span>' : ''}</small>
         </span>
         <button class="mini-btn" type="button" data-action="unequip" data-slot="${slot.id}">REMOVE</button>
       </div>`;

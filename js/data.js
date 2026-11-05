@@ -459,6 +459,161 @@ export function perkSpeedMult(state) { return 1 + perkRank(state, 'quickhands') 
 export function perkHealBonus(state) { return perkRank(state, 'fieldmedic') * 5; }
 export function perkXpMult(state) { return 1 + perkRank(state, 'deeplung') * 0.08; }
 
+/* ── crew grades and salvage chests ────────────────────────── */
+/* A crew member is a person: { id, grade, name }. Every member boosts
+   every ore source by their grade bonus. Grade 1 (Drifter, COMMON) is
+   the baseline; grade 5 (TRUE SURVIVOR) is the crown of the roster. */
+export const CREW_GRADES = [
+  { grade: 1, id: 'drifter', title: 'COMMON CREW', name: 'Drifter', bonus: 0.08, color: '#9aa8b2', icon: '☗' },
+  { grade: 2, id: 'steady', title: 'RIVETED CREW', name: 'Steady Hand', bonus: 0.12, color: '#7fdc6a', icon: '⚙' },
+  { grade: 3, id: 'foreman', title: 'VETERAN CREW', name: 'Foreman', bonus: 0.17, color: '#6fa8ff', icon: '⚑' },
+  { grade: 4, id: 'overseer', title: 'WARDEN CREW', name: 'Overseer', bonus: 0.22, color: '#c58bff', icon: '⛨' },
+  { grade: 5, id: 'legend', title: 'TRUE SURVIVOR', name: 'True Survivor', bonus: 0.30, color: '#ffb15c', icon: '☄' },
+];
+export const CREW_GRADE_MAP = Object.fromEntries(CREW_GRADES.map((g) => [g.grade, g]));
+export const CREW_LIMIT = 16;
+
+export function gradeOf(member) {
+  const g = Math.min(5, Math.max(1, Math.floor(Number(member?.grade) || 1)));
+  return CREW_GRADE_MAP[g];
+}
+export function crewCount(state) {
+  return Array.isArray(state.crew) ? state.crew.length : Math.floor(Number(state.crew) || 0);
+}
+export function crewBonus(state) {
+  let sum = 0;
+  for (const member of state.crew || []) sum += gradeOf(member).bonus;
+  return sum;
+}
+export function rosterFull(state) {
+  return crewCount(state) >= CREW_LIMIT;
+}
+
+export const CREW_CHESTS = [
+  {
+    id: 'common', name: 'COMMON CHEST', icon: '▣', color: '#9aa8b2',
+    cost: { caps: 500 }, weights: [0.72, 0.24, 0.04, 0, 0],
+    blurb: 'Locked crates from the overpass. Mostly drifters inside.',
+  },
+  {
+    id: 'rare', name: 'RARE CHEST', icon: '◈', color: '#6fa8ff',
+    cost: { caps: 2600 }, weights: [0.15, 0.45, 0.30, 0.10, 0],
+    blurb: 'Salvage-vault seals intact. Steady hands and foremen are common here.',
+  },
+  {
+    id: 'epic', name: 'EPIC CHEST', icon: '✦', color: '#c58bff',
+    cost: { caps: 9000 }, weights: [0, 0.25, 0.45, 0.22, 0.08],
+    blurb: 'Warden-era lockboxes. Overseers keep their own boots on.',
+  },
+  {
+    id: 'legendary', name: 'LEGENDARY CHEST', icon: '☄', color: '#ffb15c',
+    cost: { caps: 28000 }, weights: [0, 0, 0.20, 0.47, 0.33],
+    blurb: 'Someone from the old world sleeps inside. Every legend started here.',
+  },
+];
+export const CHEST_MAP = Object.fromEntries(CREW_CHESTS.map((c) => [c.id, c]));
+
+export const CREW_NAMES = [
+  'Dust', 'Rook', 'Vex', 'Sadie', 'Marrow', 'Kite', 'Halo', 'Socks',
+  'Grinner', 'Salt', 'Pyre', 'Nickel', 'Wren', 'Moss', 'Tally', 'Hex',
+  'Bones', 'Flint', 'Sparrow', 'Comet', 'Slate', 'Juniper', 'Ember', 'Cinder',
+];
+
+export function rollCrewGrade(weights) {
+  const roll = Math.random();
+  let acc = 0;
+  for (let i = 0; i < weights.length; i++) {
+    acc += weights[i];
+    if (roll < acc) return Math.min(5, i + 1);
+  }
+  return 1;
+}
+
+export function makeCrewMember(grade, opts = {}) {
+  const gradeName = CREW_GRADE_MAP[grade].name;
+  const name = opts.name || CREW_NAMES[Math.floor(Math.random() * CREW_NAMES.length)] + ' the ' + gradeName;
+  return {
+    id: opts.id || `crew_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    grade,
+    name,
+  };
+}
+
+/* ── tokens, gambler's slot and sideline games ─────────────── */
+/* Tokens are a run-persistent currency: the survivor earns one for
+   every 10 levels of progress and spends them on games of chance. */
+export const MILESTONE_EVERY = 10;
+export function tokenMilestonesTotal(level) {
+  return Math.floor(Math.max(0, Math.floor(level || 0)) / MILESTONE_EVERY);
+}
+export function tokenBasePay(level) {
+  return 80 + Math.max(1, Math.floor(level || 1)) * 20;
+}
+
+export function rollSlotSpin() {
+  const roll = Math.random();
+  const fill = (a, b, c) => ({ reels: [a, b, c] });
+  if (roll < 0.02) return { label: 'JACKPOT', mult: 20, tone: 'lore', ...fill('★', '★', '★') };
+  if (roll < 0.05) return { label: 'TRIPLE TOOLS', mult: 8, tone: 'good', ...fill('⚙', '⚙', '⚙') };
+  if (roll < 0.15) {
+    const g = Math.random() < 0.5 ? '⛏' : '⚙';
+    const other = g === '⛏' ? '⚙' : '☠';
+    return { label: 'A PAIR', mult: 3, tone: 'good', ...fill(g, g, other) };
+  }
+  if (roll < 0.40) return { label: 'SCRAP SPARK', mult: 0.5, tone: '', ...fill('▞', '▞', '☠') };
+  return { label: 'NO MATCH', mult: 0, tone: 'bad', ...fill('☠', '⛏', '▞') };
+}
+
+/* ── the pit: NPC duels from level 1 upward ────────────────── */
+export const PIT_TOKEN_CHANCE = 0.18;
+
+export const PIT_ROSTER = [
+  'Scrap Punk', 'Bleacher Rat', 'Rust Champion', 'Road Duelist',
+  'Slag Brute', 'Wire Ghost', 'Foundry Brawler', 'Glass Stalker',
+  'Ash Marshal', 'Reactor Ronin', 'Vault Fanatic', 'Null Duelist',
+  'Warden Adept', 'Prime Myrmidon', 'Echo of the Old Camp', 'Last Undefeated',
+];
+
+export function pitRankOf(wins) {
+  return Math.min(6, 1 + Math.floor(wins / 5));
+}
+export const PIT_RANK_NAMES = [
+  'JUNK BRACKET', 'RIVET BRACKET', 'EMBER BRACKET',
+  'STORM BRACKET', 'WARDEN BRACKET', 'TRUE SURVIVOR BRACKET',
+];
+export function pitRankName(wins) {
+  return PIT_RANK_NAMES[pitRankOf(wins) - 1];
+}
+
+export function makeChallenger(state) {
+  const stats = playerStats(state);
+  const wins = (state.pit && Math.floor(state.pit.wins)) || 0;
+  const hpRamp = 0.5 + 0.15 * Math.min(10, wins);
+  const dmgRamp = 0.35 + 0.04 * Math.min(12, wins);
+  const name = `${PIT_ROSTER[Math.min(PIT_ROSTER.length - 1, Math.floor(wins / 2))]} · RANK ${pitRankOf(wins)}`;
+  return {
+    name,
+    maxHp: Math.max(30, Math.round(stats.maxHp * hpRamp)),
+    hp: Math.max(30, Math.round(stats.maxHp * hpRamp)),
+    attack: Math.max(2, stats.attack * dmgRamp),
+    crit: Math.min(0.45, stats.crit * 0.8),
+    defense: Math.min(0.35, stats.defense * 0.7),
+  };
+}
+
+export function pitCapsReward(state) {
+  const level = Math.max(1, state.level || 1);
+  const wins = (state.pit && Math.floor(state.pit.wins)) || 0;
+  return Math.round((45 + level * 14) * (1 + wins * 0.16));
+}
+
+/* Scrap dig: a quick 5-round timing game on a moving marker. */
+export const DIG_ROUNDS = 5;
+export const DIG_COOLDOWN = 45000;
+export function digRoundPay(level) {
+  return 20 + Math.max(1, level) * 6;
+}
+
 export function attributeOreMult(state) {
   return 1 + attrLevel(state, 'luk') * 0.008;
 }
@@ -567,7 +722,17 @@ export const ZONES = [
 /* ── multipliers ───────────────────────────────────────────── */
 export function shardYieldMult(state) { return 1 + (state.shards || 0) * 0.10; }
 export function shardDamageMult(state) { return 1 + (state.shards || 0) * 0.08; }
-export function crewMult(state) { return 1 + (state.crew || 0) * 0.08; }
+export function crewMult(state) {
+  let bonus = 0;
+  const roster = state.crew;
+  if (Array.isArray(roster)) {
+    for (const member of roster) bonus += gradeOf(member).bonus;
+  } else {
+    // legacy numeric saves: every recruit was an 8% Drifter
+    bonus = Math.max(0, Math.floor(Number(roster) || 0)) * 0.08;
+  }
+  return 1 + bonus;
+}
 
 /* Passive income from working the salvage line. Each drill rig contributes a
    small cap trickle, modified by the same charm/luck/scavenger bonuses as kills. */
@@ -639,8 +804,8 @@ export function drillCost(layerIndex, count) {
   return cost;
 }
 
-export function crewCost(level) {
-  return { caps: Math.ceil(120 * Math.pow(1.75, level)) };
+export function crewCost(memberCount) {
+  return { caps: Math.ceil(120 * Math.pow(1.75, memberCount)) };
 }
 
 export function weaponCost(level) {
@@ -712,7 +877,7 @@ export function playerStats(state) {
     oreMult: oreMultiplier(state),
     xpMult: xpMultiplier(state),
     healPerKill: (g.stim > 0 ? 8 + 5 * g.stim : 6) + perkHealBonus(state) + (gear.heal || 0),
-    deathMs: Math.max(1500, 4000 - 250 * g.stim),
+    deathMs: 5000,
     speedMult: perkSpeedMult(state) * (1 + (gear.speed || 0)),
     level: lvl,
   };

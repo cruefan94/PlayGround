@@ -1400,6 +1400,7 @@ svg { display: block; }
 .gs-icon { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #3a4033; color: var(--amber); font-size: 12px; }
 .gs-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .gs-slot { font-family: var(--mono); font-size: 6.5px; letter-spacing: .12em; color: var(--muted); }
+.gs-active { color: var(--amber); font-weight: bold; }
 .gs-body strong { font-size: 9px; color: #e2dbc8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gs-body small { font-family: var(--mono); font-size: 7px; color: #8f9787; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

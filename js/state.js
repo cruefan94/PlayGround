@@ -1,8 +1,12 @@
 import {
   SAVE_KEY, VERSION, LAYERS, ZONES, ORE_ORDER, MINING_TOOLS, COMBAT_WEAPONS,
-  GEAR_SLOTS, MAX_INVENTORY, sanitizeLootItem,
+  GEAR_SLOTS, MAX_INVENTORY, sanitizeLootItem, makeCrewMember, CREW_NAMES,
   makeEnemy, playerStats, drillRate, salvageCapsRate, layerMaxHp, fmt,
 } from './data.js';
+
+function CREW_NAMES_RECOVER() {
+  return CREW_NAMES[Math.floor(Math.random() * CREW_NAMES.length)] || 'Drifter';
+}
 
 export function defaultState() {
   return {
@@ -10,9 +14,10 @@ export function defaultState() {
     ores: { scrap: 0, iron: 0, copper: 0, titanium: 0, uranium: 0, singularity: 0 },
     caps: 25,
     shards: 0,
+    tokens: 0,
     pickaxe: 1,
     drills: LAYERS.map(() => 0),
-    crew: 0,
+    crew: [],
     nodes: LAYERS.map(() => 0),
     veinHp: LAYERS.map((l) => l.hp),
     layersUnlocked: 1,
@@ -44,8 +49,10 @@ export function defaultState() {
     },
     stats: {
       totalMined: 0, totalCaps: 0, clicks: 0, kills: 0, deaths: 0,
-      detonations: 0, startedAt: Date.now(),
+      detonations: 0, startedAt: Date.now(), tokenMilestones: 0, slotSpins: 0, diggingRounds: 0,
     },
+    pit: { rank: 0, wins: 0, losses: 0 },
+    nextDigAt: 0,
     autoMine: false,
     sound: true,
     lastSeen: Date.now(),
@@ -59,7 +66,27 @@ function mergeState(raw) {
   base.caps = Number(raw.caps) || 0;
   base.shards = Number(raw.shards) || 0;
   base.pickaxe = Math.max(1, Math.floor(Number(raw.pickaxe) || 1));
-  base.crew = Math.max(0, Math.floor(Number(raw.crew) || 0));
+  base.crew = [];
+  if (Array.isArray(raw.crew)) {
+    for (const member of raw.crew) {
+      if (base.crew.length >= 60) break;
+      const grade = Math.min(5, Math.max(1, Math.floor(Number(member?.grade) || 1)));
+      const name = String(member?.name || '').trim().slice(0, 28) || CREW_NAMES_RECOVER();
+      base.crew.push({
+        id: String(member?.id || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`),
+        grade,
+        name,
+      });
+    }
+  } else {
+    // legacy saves counted crew as a number of 8% recruits — keep that power level
+    const legacy = Math.max(0, Math.floor(Number(raw.crew) || 0));
+    for (let i = 0; i < legacy; i++) {
+      base.crew.push(makeCrewMember(1));
+    }
+  }
+
+  base.tokens = Math.max(0, Math.floor(Number(raw.tokens) || 0));
   base.level = Math.max(1, Math.floor(Number(raw.level) || 1));
   base.xp = Math.max(0, Number(raw.xp) || 0);
   base.points = Math.max(0, Math.floor(Number(raw.points) || 0));
@@ -143,6 +170,17 @@ function mergeState(raw) {
   base.stats.kills = Math.max(0, Math.floor(Number(base.stats.kills) || 0));
   base.stats.deaths = Math.max(0, Math.floor(Number(base.stats.deaths) || 0));
   base.stats.detonations = Math.max(0, Math.floor(Number(base.stats.detonations) || 0));
+  base.stats.tokenMilestones = Math.max(0, Math.floor(Number(base.stats.tokenMilestones) || 0));
+  base.stats.slotSpins = Math.max(0, Math.floor(Number(base.stats.slotSpins) || 0));
+  base.stats.diggingRounds = Math.max(0, Math.floor(Number(base.stats.diggingRounds) || 0));
+
+  const pit = raw.pit || {};
+  base.pit = {
+    wins: Math.max(0, Math.floor(Number(pit.wins) || 0)),
+    losses: Math.max(0, Math.floor(Number(pit.losses) || 0)),
+    rank: Math.max(0, Math.floor(Number(pit.rank) || 0)),
+  };
+  base.nextDigAt = Math.max(0, Number(raw.nextDigAt) || 0);
   base.autoMine = raw.autoMine === true;
   base.sound = raw.sound !== false;
   base.lastSeen = Number(raw.lastSeen) || Date.now();
@@ -206,6 +244,16 @@ export function resetProgress(state) {
   const fresh = defaultState();
   // Prestige wipes the run, but the survivor's RPG progression and outfits persist.
   fresh.shards = state.shards;
+  // Tokens and the crew are the survivor's own: they walk out of the fire too.
+  fresh.tokens = state.tokens || 0;
+  fresh.crew = (state.crew || []).map((member) => ({ ...member }));
+  fresh.pit = { ...state.pit };
+  fresh.stats = {
+    ...fresh.stats,
+    tokenMilestones: state.stats?.tokenMilestones || 0,
+    slotSpins: state.stats?.slotSpins || 0,
+    diggingRounds: state.stats?.diggingRounds || 0,
+  };
   fresh.sound = state.sound;
   fresh.autoMine = !!state.autoMine;
   fresh.stats.startedAt = state.stats.startedAt;

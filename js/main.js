@@ -403,15 +403,52 @@ class Game {
 
   buyCrew() {
     const s = this.state;
-    const cost = crewCost(s.crew);
+    if (rosterFull(s)) {
+      this.ui.toast('Every bunk is taken — open a RARE+ chest to replace drifters.', 'bad');
+      this.audio.error();
+      return;
+    }
+    const cost = crewCost(crewCount(s));
     if (!canAfford(s, cost)) return this.deny(cost);
     spend(s, cost);
-    s.crew += 1;
+    const member = makeCrewMember(1);
+    s.crew.push(member);
+    const bonus = Math.round(gradeOf(member).bonus * 100);
     this.audio.buy();
-    this.ui.toast(`Survivor ${s.crew} joined · ore yield +${s.crew * 8}%`, 'good');
-    this.log(`Crew expanded to ${s.crew}. Every ore source is ${s.crew * 8}% richer.`, 'good');
+    this.ui.toast(`${member.name} joined · crew ore +${bonus}%`, 'good');
+    this.log(`${member.name} (COMMON CREW) hired. Roster at ${crewCount(s)} · ore yield +${Math.round(crewBonus(s) * 100)}%.`, 'good');
     this.ui.render();
     this.saveNow();
+  }
+
+  openChest(chestId) {
+    const s = this.state;
+    const chest = CHEST_MAP[chestId];
+    if (!chest) return;
+    if (rosterFull(s)) {
+      this.ui.toast('Every bunk is full — the crew cannot take another soul.', 'bad');
+      this.audio.error();
+      return;
+    }
+    if (!canAfford(s, chest.cost)) return this.deny(chest.cost);
+    spend(s, chest.cost);
+    const grade = rollCrewGrade(chest.weights);
+    const member = makeCrewMember(grade);
+    s.crew.push(member);
+    const g = gradeOf(member);
+    s.stats.chestsOpened = (s.stats.chestsOpened || 0) + 1;
+    this.audio.buy();
+    this.log(
+      `${chest.name} opened: ${member.name}, ${g.title} · ore yield +${Math.round(g.bonus * 100)}%. Roster at ${crewCount(s)} · +${Math.round(crewBonus(s) * 100)}% total.`, '',
+    );
+    this.ui.toast(
+      `${chest.name} · ${member.name} · ${g.title} · +${Math.round(g.bonus * 100)}% ORE`,
+      grade >= 4 ? 'lore' : grade >= 3 ? 'good' : '',
+    );
+    if (grade >= 4) this.audio.overload();
+    this.ui.render();
+    this.saveNow();
+    this.ui.refreshCrewSection();
   }
 
   buyDrill(index) {
@@ -473,7 +510,7 @@ class Game {
     this.audio.buy();
     const stats = playerStats(s);
     this.ui.toast(`Stim kit built · +${stats.healPerKill} HP per kill`, 'good');
-    this.log(`Stim kit rebuilt. Heals ${stats.healPerKill} HP after each kill; reboot time ${stats.deathMs / 1000}s.`, 'good');
+    this.log(`Stim kit rebuilt. Heals ${stats.healPerKill} HP after each kill; knockout 5s.`, 'good');
     this.ui.render();
     this.saveNow();
   }
@@ -490,7 +527,7 @@ class Game {
       this.audio.buy();
       this.ui.toast(`SCHEMATIC RECOVERED · ${tool.name}`, 'lore');
       this.log(`${tool.name} built from salvage. ${tool.stats}.`, 'good');
-    } else if (s.equippedTool === tool.id && !s.loadout.tool) {
+    } else if (s.equippedTool === tool.id && !equippedItem(s, 'tool')) {
       return;
     }
     s.equippedTool = tool.id;
@@ -513,13 +550,14 @@ class Game {
       this.audio.buy();
       this.ui.toast(`SCHEMATIC RECOVERED · ${weapon.name}`, 'lore');
       this.log(`${weapon.name} built from salvage. ${weapon.stats}.`, 'good');
-    } else if (s.equippedWeapon === weapon.id && !s.loadout.weapon) {
+    } else if (s.equippedWeapon === weapon.id && !equippedItem(s, 'weapon')) {
       return;
     }
     s.equippedWeapon = weapon.id;
+    // The schematic choice takes the fighter's hand back from any fitted loot weapon.
     s.loadout.weapon = null;
     this.audio.tone({ freq: 300, end: 180, dur: 0.1, type: 'sawtooth', vol: 0.14 });
-    this.ui.toast(`${weapon.name} equipped`, 'good');
+    this.ui.toast(`${weapon.name} equipped · now wielded in combat`, 'good');
     this.ui.render();
     this.saveNow();
   }
