@@ -694,7 +694,7 @@ export function towerReward(floor) {
   return {
     caps: Math.ceil((16 + 6 * f) * Math.pow(1.11, f - 1) * (f % 5 === 0 ? 2 : 1)),
     ore: ORE_ORDER[Math.min(5, Math.floor((f - 1) / 3))],
-    oreAmt: Math.ceil((2 + f * 0.9) * (f % 5 === 0 ? 2 : 1)),
+    oreAmt: Math.ceil((2 + f * 0.9) * (f % 5 === 0 ? 2 : 1) * ORE_INCOME_SCALE),
     xp: Math.ceil((5 + f * 2) * (f % 5 === 0 ? 4 : 1)),
     /* every 10th floor boss spills the glowing green isotope premium */
     iso: f % 10 === 0 ? Math.max(1, Math.round(f / 10)) : 0,
@@ -842,6 +842,12 @@ export const ZONES = [
 export function shardYieldMult(state) { return 1 + (state.shards || 0) * 0.10; }
 export function shardDamageMult(state) { return 1 + (state.shards || 0) * 0.08; }
 
+/* Lean-vein economy: every ore income source (strikes, drills, kills,
+   tower floors) passes through this dampener. The unlock tolls quoted on
+   the shaft map are tuned for these leaner yields and are NOT scaled —
+   deep shafts must be earned, not printed. */
+export const ORE_INCOME_SCALE = 0.6;
+
 /* Passive income from working the salvage line. Each drill rig contributes a
    small cap trickle, modified by the same charm/luck/scavenger bonuses as kills. */
 export function salvageCapsRate(state) {
@@ -878,12 +884,13 @@ export function strikeYield(state, layerIndex) {
     * (1 + crewBonus(state).yield)
     * shardYieldMult(state)
     * oreMultiplier(state)
-    * nodeRichness(state.nodes[layerIndex]);
+    * nodeRichness(state.nodes[layerIndex])
+    * ORE_INCOME_SCALE;
 }
 
 export function drillRate(state, layerIndex) {
   const layer = LAYERS[layerIndex];
-  return layer.baseYield * 0.22 * shardYieldMult(state) * oreMultiplier(state);
+  return layer.baseYield * 0.22 * shardYieldMult(state) * oreMultiplier(state) * ORE_INCOME_SCALE;
 }
 
 export function allDrillRate(state) {
@@ -1013,7 +1020,7 @@ export function makeEnemy(zoneIndex, wave) {
     interval: zone.interval,
     caps: Math.ceil(zone.caps * (1 + 0.06 * waveIdx) * (boss ? 4 : 1)),
     ore: zone.ore,
-    oreAmt: Math.ceil(zone.oreAmt * (1 + 0.03 * waveIdx) * (boss ? 3 : 1)),
+    oreAmt: Math.ceil(zone.oreAmt * (1 + 0.03 * waveIdx) * (boss ? 3 : 1) * ORE_INCOME_SCALE),
     xp: Math.ceil((5 + zoneIndex * 7) * (1 + 0.08 * waveIdx) * (boss ? 6 : 1)),
     nextAttack: 0,
     hitFlash: 0,
