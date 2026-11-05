@@ -250,7 +250,7 @@ class Game {
     const cost = 100 + spent * 10;
     if (s.caps < cost) {
       this.audio.error();
-      this.ui.toast(`Respec costs ${fmt(cost)} coins.`, 'bad');
+      this.ui.toast(`Respec costs ${fmt(cost)} metal nuts.`, 'bad');
       return;
     }
     s.caps -= cost;
@@ -259,8 +259,8 @@ class Game {
     const stats = playerStats(s);
     s.combat.hp = Math.min(stats.maxHp, s.combat.hp);
     this.audio.buy();
-    this.ui.toast(`Attributes reset · ${spent} points refunded · −${fmt(cost)} coins`, 'good');
-    this.log(`Paid ${fmt(cost)} coins to reset ${spent} attribute points.`, '');
+    this.ui.toast(`Attributes reset · ${spent} points refunded · −${fmt(cost)} metal nuts`, 'good');
+    this.log(`Paid ${fmt(cost)} metal nuts to reset ${spent} attribute points.`, '');
     this.ui.render();
     this.saveNow();
   }
@@ -441,8 +441,8 @@ class Game {
       s.caps += refund;
       s.stats.totalCaps = (s.stats.totalCaps || 0) + refund;
       this.audio.buy();
-      this.ui.toast(`DUPLICATE · ${member.name} → +${fmt(refund)} coins`, '');
-      this.log(`Opened a ${chest.name}: ${member.name} again. Duplicate crew converted to ${fmt(refund)} coins.`, '');
+      this.ui.toast(`DUPLICATE · ${member.name} → +${fmt(refund)} metal nuts`, '');
+      this.log(`Opened a ${chest.name}: ${member.name} again. Duplicate crew converted to ${fmt(refund)} metal nuts.`, '');
       this.ui.render();
       this.saveNow();
       this.ui.openChestResult(chest, member, false);
@@ -517,8 +517,8 @@ class Game {
     const isoGain = reward.iso || 0;
     if (isoGain > 0) s.iso = (s.iso || 0) + isoGain;
 
-    this.ui.toast(`FLOOR ${floor} CLEARED · +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} ISO` : ''}`, 'good');
-    this.log(`Floor ${floor} down. +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} glowing isotopes` : ''} · +${reward.xp} XP.`, 'good');
+    this.ui.toast(`FLOOR ${floor} CLEARED · +${fmt(caps)} metal nuts · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} ISO` : ''}`, 'good');
+    this.log(`Floor ${floor} down. +${fmt(caps)} metal nuts · +${fmt(oreAmt)} ${ORES[reward.ore].name}${isoGain ? ` · +${fmt(isoGain)} glowing isotopes` : ''} · +${reward.xp} XP.`, 'good');
     if (boss) this.audio.overload();
 
     // unique weapons & armor from the tower
@@ -763,7 +763,7 @@ class Game {
       const value = scrapValue(item);
       s.caps += value;
       s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
-      this.ui.toast(`PACK FULL · ${item.name} auto-scrapped +${fmt(value)} coins`, 'bad');
+      this.ui.toast(`PACK FULL · ${item.name} auto-scrapped +${fmt(value)} metal nuts`, 'bad');
       return false;
     }
     s.inventory.push(item);
@@ -778,7 +778,7 @@ class Game {
     const cost = lootRunCost(s);
     if (!canAfford(s, { caps: cost })) {
       this.audio.error();
-      this.ui.toast(`A salvage run costs ${fmt(cost)} coins.`, 'bad');
+      this.ui.toast(`A salvage run costs ${fmt(cost)} metal nuts.`, 'bad');
       return;
     }
     spend(s, { caps: cost });
@@ -839,8 +839,8 @@ class Game {
     s.caps += value;
     s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
     this.audio.buy();
-    this.ui.toast(`SCRAPPED · ${item.name} · +${fmt(value)} coins`, '');
-    this.log(`Scrapped ${item.name} for ${fmt(value)} coins.`, '');
+    this.ui.toast(`SCRAPPED · ${item.name} · +${fmt(value)} metal nuts`, '');
+    this.log(`Scrapped ${item.name} for ${fmt(value)} metal nuts.`, '');
     this.ui.render();
     this.saveNow();
     this.ui.refreshOpenGear();
@@ -942,8 +942,8 @@ class Game {
       const bossWave = (c.waves[c.zone] || 2) - 1;
       const isoGain = 1 + (bossWave % 50 === 0 ? 2 : 0);
       s.iso = (s.iso || 0) + isoGain;
-      this.ui.toast(`${enemy.name} DOWN · +${fmt(caps)} coins · +${fmt(isoGain)} ISO · +${xp} XP`, 'good');
-      this.log(`${enemy.name} fell on wave ${bossWave}. +${fmt(caps)} coins · +${fmt(isoGain)} glowing isotopes · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, 'good');
+      this.ui.toast(`${enemy.name} DOWN · +${fmt(caps)} metal nuts · +${fmt(isoGain)} ISO · +${xp} XP`, 'good');
+      this.log(`${enemy.name} fell on wave ${bossWave}. +${fmt(caps)} metal nuts · +${fmt(isoGain)} glowing isotopes · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, 'good');
       this.audio.overload();
       if (c.zone === ZONES.length - 1) {
         c.primeKills += 1;
@@ -951,7 +951,7 @@ class Game {
         this.ui.toast('CORE CHARGED · OVERLOAD AVAILABLE IN FORGE', 'lore');
       }
     } else {
-      this.log(`${enemy.name} down · +${fmt(caps)} coins · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, '');
+      this.log(`${enemy.name} down · +${fmt(caps)} metal nuts · +${fmt(oreAmt)} ${ORES[enemy.ore].name} · +${xp} XP.`, '');
     }
     if (c.waves[c.zone] % 10 === 1 && c.waves[c.zone] > 1) {
       this.log(`Wave ${c.waves[c.zone]} in ${zone.name}. Something bigger is coming.`, 'alert');
@@ -1060,7 +1060,7 @@ class Game {
       eyebrow: 'REACTOR CONTROL',
       title: 'Overload the core?',
       body: `
-        <p>The reactor will detonate. Your ore, coins, drills, pickaxe, crew, combat gear and territories will be <strong>wiped</strong>.</p>
+        <p>The reactor will detonate. Your ore, metal nuts, drills, pickaxe, crew, combat gear and territories will be <strong>wiped</strong>.</p>
         <p>You will gain <span class="gain">${gain} core shard${gain > 1 ? 's' : ''}</span> (now ${s.shards}, after ${s.shards + gain}). Each shard gives <strong>+10% ore yield</strong> and <strong>+8% damage</strong>, forever.</p>
         <p>Your <strong>survivor level, attributes, perks and outfits persist</strong> through the overload.</p>
         <p>This cannot be undone.</p>`,

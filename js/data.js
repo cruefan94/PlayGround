@@ -13,7 +13,7 @@ export const ORES = {
 };
 export const ORE_ORDER = ['scrap', 'iron', 'copper', 'titanium', 'uranium', 'singularity'];
 
-/* Outfits are permanent survivor gear. Each level is bought with caps (money) + ore. */
+/* Outfits are permanent survivor gear. Each level is bought with metal nuts + ore. */
 export const OUTFITS = [
   {
     id: 'rebreather', name: 'Glowcap Rebreather', slot: 'HEAD', icon: '☣',
@@ -33,7 +33,7 @@ export const OUTFITS = [
     id: 'charm', name: 'Warden Charm', slot: 'CHARM', icon: '✦',
     max: 15,
     blurb: 'A dead warden\'s token. The wastes pay tribute to it.',
-    effect: (lvl) => `Caps +${lvl * 3}% · Ore +${(lvl * 1.5).toFixed(1)}%`,
+    effect: (lvl) => `Nuts +${lvl * 3}% · Ore +${(lvl * 1.5).toFixed(1)}%`,
     cost: (lvl) => ({ caps: Math.ceil(180 * Math.pow(1.5, lvl)), iron: Math.ceil(25 * Math.pow(1.4, lvl)) }),
   },
 ];
@@ -173,21 +173,27 @@ export const COMBAT_WEAPONS = [
 export const COMBAT_WEAPON_MAP = Object.fromEntries(COMBAT_WEAPONS.map((w) => [w.id, w]));
 
 /* ── class ladder (drives gear pricing) ───────────────────── */
-/* Every weapon/tool class earns a pricing rank 0–5 derived from its
-   unlock cost: starter salvage is dirt cheap, anomaly-grade is dear.
-   Armor, helm and charm have no class ladder — rank 0, priced by rarity. */
-function costRank(unlock) {
-  if (!unlock) return 0;
-  const caps = unlock.caps || 0;
-  if (caps <= 100) return 1;
-  if (caps <= 900) return 2;
-  if (caps <= 2500) return 3;
-  if (caps <= 7000) return 4;
-  return 5;
+/* Every weapon/tool class is ranked on its own, cheapest first: two
+   null-unlock starters share rank 0, and every paid class gets a
+   strictly increasing rank (1…14). Ties on coin cost are broken by the
+   deepest ore tier required, then by total ore bulk. Armor, helm and
+   charm have no class ladder — rank 0, priced by rarity alone. */
+const ORE_TIER_INDEX = Object.fromEntries(ORE_ORDER.map((id, i) => [id, i]));
+function classFieldCost(unlock) {
+  if (!unlock) return -1;
+  const ores = Object.entries(unlock).filter(([key]) => key !== 'caps');
+  const deepest = ores.reduce((max, [key]) => Math.max(max, ORE_TIER_INDEX[key] ?? 0), 0);
+  const bulk = ores.reduce((sum, [, value]) => sum + value, 0);
+  return (unlock.caps || 0) + deepest * 3000 + bulk * 0.5;
 }
 export const CLASS_RANK_MAP = {};
-for (const tool of MINING_TOOLS) CLASS_RANK_MAP[tool.id] = costRank(tool.unlock);
-for (const weapon of COMBAT_WEAPONS) CLASS_RANK_MAP[weapon.id] = costRank(weapon.unlock);
+for (const item of [...MINING_TOOLS, ...COMBAT_WEAPONS]) {
+  if (!item.unlock) CLASS_RANK_MAP[item.id] = 0;
+}
+[...MINING_TOOLS, ...COMBAT_WEAPONS]
+  .filter((item) => item.unlock)
+  .sort((a, b) => classFieldCost(a.unlock) - classFieldCost(b.unlock))
+  .forEach((item, i) => { CLASS_RANK_MAP[item.id] = i + 1; });
 
 export function classTierRank(item) {
   return CLASS_RANK_MAP[item?.classId] ?? 0;
@@ -236,7 +242,7 @@ export const GEAR_SLOT_MAP = Object.fromEntries(GEAR_SLOTS.map((s) => [s.id, s])
 
 export const GEAR_STAT_LABELS = {
   damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL',
-  defense: 'DEF', ore: 'ORE', caps: 'CAPS', xp: 'XP',
+  defense: 'DEF', ore: 'ORE', caps: 'NUTS', xp: 'XP',
   power: 'POWER', yield: 'YIELD', cooldown: 'SWING',
 };
 const PCT_STATS = new Set(['damage', 'crit', 'speed', 'defense', 'ore', 'caps', 'xp', 'power', 'yield', 'cooldown']);
@@ -325,12 +331,12 @@ export function gearStatLines(item) {
   return Object.entries(item?.stats || {}).map(([key, value]) => gearStatText(key, value));
 }
 
-/* Scrap payout in coins. Climbs with rarity, item level and class rank —
+/* Scrap payout in metal nuts. Climbs with rarity, item level and class rank —
    scrapping a Void Railgun pays far better than a Scrap Pistol. */
 export function scrapValue(item) {
   const rarity = rarityOf(item);
   const rank = classTierRank(item);
-  return Math.ceil((8 + (item?.level || 1) * 2.5 + rarity.rank * 14) * (1 + rank * 0.3) * (item?.unique ? 3 : 1));
+  return Math.ceil((8 + (item?.level || 1) * 2.5 + rarity.rank * 14) * (1 + rank * 0.18) * (item?.unique ? 3 : 1));
 }
 
 export function lootRunCost(state) {
@@ -503,14 +509,14 @@ export const ATTRIBUTES = [
   { id: 'str', key: 'STR', name: 'Strength', desc: '+2.5% attack per point', effect: (v) => `+${(v * 2.5).toFixed(1)}% ATK` },
   { id: 'vit', key: 'VIT', name: 'Vitality', desc: '+8 HP and +0.4% resist per point', effect: (v) => `+${v * 8} HP · +${(v * 0.4).toFixed(1)}% DEF` },
   { id: 'agi', key: 'AGI', name: 'Agility', desc: '+0.6% crit per point', effect: (v) => `+${(v * 0.6).toFixed(1)}% CRIT` },
-  { id: 'luk', key: 'LUK', name: 'Luck', desc: '+0.8% ore and +1.5% caps per point', effect: (v) => `+${(v * 0.8).toFixed(1)}% ORE · +${(v * 1.5).toFixed(1)}% CAPS` },
+  { id: 'luk', key: 'LUK', name: 'Luck', desc: '+0.8% ore and +1.5% metal nuts per point', effect: (v) => `+${(v * 0.8).toFixed(1)}% ORE · +${(v * 1.5).toFixed(1)}% NUTS` },
 ];
 
 export const PERKS = [
   { id: 'berserker', name: 'Berserker', max: 5, desc: '+10% attack per rank.' },
   { id: 'ironhide', name: 'Ironhide', max: 5, desc: '+10% max HP per rank.' },
   { id: 'prospector', name: 'Prospector', max: 5, desc: '+10% ore yield per rank.' },
-  { id: 'scavenger', name: 'Scavenger', max: 5, desc: '+10% caps (money) from kills per rank.' },
+  { id: 'scavenger', name: 'Scavenger', max: 5, desc: '+10% metal nuts from kills per rank.' },
   { id: 'executioner', name: 'Executioner', max: 5, desc: '+5% critical chance per rank.' },
   { id: 'quickhands', name: 'Quick Hands', max: 5, desc: '+8% attack speed per rank.' },
   { id: 'fieldmedic', name: 'Field Medic', max: 5, desc: '+5 HP healed per kill per rank.' },
@@ -552,7 +558,7 @@ export const CREW_POOL = [
   { id: 'whistler', name: 'Tin Whistler', cls: 1, blurb: 'Signal codes nobody can read.', stats: { atk: 0.02 }, buff: 'ATK +2%' },
   { id: 'filter', name: 'Filter Kid', cls: 1, blurb: 'First to spot the weak seam.', stats: { crit: 0.01 }, buff: 'CRIT +1%' },
   { id: 'bolt', name: 'Bolt Bearer', cls: 1, blurb: 'Carries the good bolts. Uses them.', stats: { power: 0.02 }, buff: 'VEIN POWER +2%' },
-  { id: 'dust', name: 'Dust Scavenger', cls: 1, blurb: 'Trades caps from other rigs.', stats: { caps: 0.02 }, buff: 'CAPS +2%' },
+  { id: 'dust', name: 'Dust Scavenger', cls: 1, blurb: 'Trades metal nuts from other rigs.', stats: { caps: 0.02 }, buff: 'NUTS +2%' },
   /* class 2 — uncommon */
   { id: 'slagwalker', name: 'Slagwalker', cls: 2, blurb: 'Crosses toxic runoff in boots of slag.', stats: { def: 0.02 }, buff: 'DEF +2%' },
   { id: 'canteen', name: 'Canteen Bearer', cls: 2, blurb: 'Stims, salts and cold water, on time.', stats: { heal: 3 }, buff: 'HEAL +3 PER KILL' },
@@ -564,16 +570,16 @@ export const CREW_POOL = [
   { id: 'saint', name: 'Saint of Dust', cls: 3, blurb: 'Blessed the waste take everything but you.', stats: { hp: 60, def: 0.02 }, buff: 'HP +60 · DEF +2%' },
   { id: 'kiteer', name: 'Kite Flier', cls: 3, blurb: 'Counts the tower-glass and skyscrapers of experience.', stats: { xp: 0.12 }, buff: 'XP +12%' },
   { id: 'greaser', name: 'Greaser Gang', cls: 3, blurb: 'Four hands, one wrench, zero overtime.', stats: { speed: 0.04 }, buff: 'SPEED +4%' },
-  { id: 'coinwise', name: 'Coinwise Broker', cls: 3, blurb: 'Caps multiply when they touch her ledger.', stats: { caps: 0.08 }, buff: 'CAPS +8%' },
+  { id: 'coinwise', name: 'Nutwise Broker', cls: 3, blurb: 'Metal nuts multiply when they touch her ledger.', stats: { caps: 0.08 }, buff: 'NUTS +8%' },
   /* class 4 — epic */
   { id: 'molten', name: 'Molten Pact', cls: 4, blurb: 'Reactor-warm blood, literally.', stats: { atk: 0.09, crit: 0.02 }, buff: 'ATK +9% · CRIT +2%' },
   { id: 'titan', name: 'Titan Herder', cls: 4, blurb: 'Walks drill rigs like plough oxen.', stats: { ore: 0.10, power: 0.06 }, buff: 'ORE +10% · VEIN +6%' },
   { id: 'physician', name: 'Warden Physician', cls: 4, blurb: 'Field surgery from a dead civilization.', stats: { heal: 8, def: 0.04 }, buff: 'HEAL +8/KILL · DEF +4%' },
-  { id: 'ledger', name: 'Wasteland Ledger', cls: 4, blurb: 'Every trade, every debt, every skull.', stats: { caps: 0.12, ore: 0.06 }, buff: 'CAPS +12% · ORE +6%' },
+  { id: 'ledger', name: 'Wasteland Ledger', cls: 4, blurb: 'Every trade, every debt, every skull.', stats: { caps: 0.12, ore: 0.06 }, buff: 'NUTS +12% · ORE +6%' },
   /* class 5 — true survivors */
   { id: 'hollow', name: 'Hollowwalker', cls: 5, blurb: 'Walked out of the vault the wrong way.', stats: { atk: 0.15, crit: 0.04, def: 0.05 }, buff: 'ATK +15% · CRIT +4% · DEF +5%' },
   { id: 'resonant', name: 'The Resonant', cls: 5, blurb: 'Hears ore singing under every rock.', stats: { ore: 0.18, xp: 0.20 }, buff: 'ORE +18% · XP +20%' },
-  { id: 'goldblood', name: 'Goldblood', cls: 5, blurb: 'Caps run in the family. In the veins.', stats: { hp: 150, caps: 0.18 }, buff: 'HP +150 · CAPS +18%' },
+  { id: 'goldblood', name: 'Goldblood', cls: 5, blurb: 'Metal nuts run in the family. In the veins.', stats: { hp: 150, caps: 0.18 }, buff: 'HP +150 · NUTS +18%' },
 ];
 export const CREW_COUNT = CREW_POOL.length;
 
@@ -596,7 +602,7 @@ export function crewBonus(state) {
   return agg;
 }
 
-/* Supply chests. Each tier guarantees its class floor; costs are caps (coins). */
+/* Supply chests. Each tier guarantees its class floor; costs are metal nuts. */
 export const CHESTS = [
   {
     id: 'common', name: 'Common Cache', tier: 'CLASS 1+ CHEST', color: '#9aa8b2', icon: '▣',
@@ -629,18 +635,19 @@ export const CHEST_MAP = Object.fromEntries(CHESTS.map((c) => [c.id, c]));
 /* ── store ────────────────────────────────────────────────── */
 /* Premium black market. Everything here is priced in isotopes —
    the glowing green currency earned from 10-round bosses, tower
-   milestones and contracts. Coins never work in here. */
+   milestones and contracts. Metal nuts never work in here. */
 export const STORE_REROLL_COST = 3;
 export const STORE_STOCK_SIZE = 3;
 
 /* Isotope price of a gear offer. Rarity sets the floor, item level nudges
-   it, and the class ladder does the heavy lifting: common-class salvage
-   starts near 2 ISO while anomaly-grade runs 5× that. Uniques stay premium. */
+   it, and the individual class ladder does the heavy lifting: every step
+   up the ladder adds 8%, so a Void Railgun roughly doubles a mid-class
+   piece while starter-class salvage stays pocket change. Uniques ×1.7. */
 export function isoValue(item) {
   const rarity = rarityOf(item);
   const rank = classTierRank(item);
-  const base = 2 + rarity.rank * 2.5 + (item?.level || 1) * 0.12 + rank * 2.5;
-  return Math.max(1, Math.ceil(base * (item?.unique ? 1.7 : 1)));
+  const base = 2 + rarity.rank * 2.5 + (item?.level || 1) * 0.12;
+  return Math.max(1, Math.ceil(base * (1 + rank * 0.08) * (item?.unique ? 1.7 : 1)));
 }
 
 /* ── contracts (one-time isotope bounties) ────────────────── */
@@ -1045,7 +1052,7 @@ export function fmtRate(n) {
 
 export function costLabel(cost) {
   return Object.entries(cost).map(([k, v]) => {
-    const name = k === 'caps' ? 'coins' : k === 'iso' ? 'isotopes' : ORES[k].name;
+    const name = k === 'caps' ? 'metal nuts' : k === 'iso' ? 'isotopes' : ORES[k].name;
     return `${fmt(v)} ${name}`;
   }).join(' · ');
 }

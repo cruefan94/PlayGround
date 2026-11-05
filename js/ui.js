@@ -15,6 +15,20 @@ import {
 const $ = (id) => document.getElementById(id);
 const setText = (el, text) => { if (el && el.textContent !== text) el.textContent = text; };
 
+/* class-tier chip colors, cheapest → most exotic (rank 0…14) */
+const TIER_COLORS = [
+  '#8d947f', '#9aa8b2', '#a6bfb0', '#7fdc6a', '#6fd882', '#a4d45a', '#d8c95a',
+  '#e8b04c', '#ff9a4c', '#ff7a2b', '#e8912b', '#c98a3c', '#6fd8dc', '#49e0e8', '#7df5ef',
+];
+const tierChip = (item) => {
+  const tier = item.classId ? tierLabel(item.classId) : '';
+  if (!tier) return '';
+  const rank = classTierRank(item);
+  const color = TIER_COLORS[Math.min(rank, TIER_COLORS.length - 1)];
+  const anomaly = tier === 'ANOMALY' ? ' anomaly' : '';
+  return `<i class="lc-tier${anomaly}" style="color:${color}">${tier}</i>`;
+};
+
 export class UI {
   constructor(game) {
     this.game = game;
@@ -47,7 +61,7 @@ export class UI {
     const wrap = $('resources');
     this.resEls = {};
     const specs = [
-      { key: 'caps', name: 'COINS', color: '#e9c46a', cls: 'caps' },
+      { key: 'caps', name: 'NUTS', color: '#e9c46a', cls: 'caps' },
       { key: 'iso', name: 'ISO', color: '#7dff5a', cls: 'iso' },
       ...ORE_ORDER.map((key) => ({ key, name: ORES[key].name.toUpperCase(), color: ORES[key].color })),
       { key: 'shards', name: 'SHARDS', color: '#b98aff', cls: 'shards' },
@@ -497,7 +511,7 @@ export class UI {
     const capsRate = salvageCapsRate(s);
     setText(caps.val, fmt(s.caps));
     setText(caps.per, capsRate > 0 ? `+${fmtRate(capsRate)}` : '');
-    caps.chip.title = `Salvage coins (common money) · ${capsRate > 0 ? `${fmtRate(capsRate)} from salvage · ` : ''}earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
+    caps.chip.title = `Salvage metal nuts (common money) · ${capsRate > 0 ? `${fmtRate(capsRate)} from salvage · ` : ''}earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
     const iso = this.resEls.iso;
     setText(iso.val, fmt(s.iso || 0));
     iso.chip.title = `Glowing green isotopes (premium) — from 10-round bosses, tower milestones and contracts. Spent only in the STORE.`;
@@ -600,7 +614,7 @@ export class UI {
     setText(r.crewBadge, `CREW ${crewCount(s)} / ${CREW_COUNT}`);
     const oreRate = LAYERS.reduce((sum, _, i) => sum + (s.drills[i] || 0) * drillRate(s, i), 0);
     const capsRate = salvageCapsRate(s);
-    setText(r.drillRateTotal, `${fmtRate(oreRate)} ore · ${fmtRate(capsRate)} coins`);
+    setText(r.drillRateTotal, `${fmtRate(oreRate)} ore · ${fmtRate(capsRate)} metal nuts`);
 
     // mining tools
     const equippedTool = miningTool(s);
@@ -766,7 +780,7 @@ export class UI {
     const bonus = crewBonus(s);
     const chips = [];
     if (bonus.ore) chips.push(`ORE +${(bonus.ore * 100).toFixed(1)}%`);
-    if (bonus.caps) chips.push(`COINS +${(bonus.caps * 100).toFixed(1)}%`);
+    if (bonus.caps) chips.push(`NUTS +${(bonus.caps * 100).toFixed(1)}%`);
     if (bonus.atk) chips.push(`ATK +${(bonus.atk * 100).toFixed(1)}%`);
     if (bonus.crit) chips.push(`CRIT +${(bonus.crit * 100).toFixed(1)}%`);
     if (bonus.def) chips.push(`DEF +${(bonus.def * 100).toFixed(1)}%`);
@@ -808,9 +822,9 @@ export class UI {
           <span class="chest-reveal-tier">${chest.icon} ${chest.name} → CLASS ${member.cls}</span>
           <strong class="chest-reveal-name">${member.name}</strong>
           <span class="chest-reveal-cls">${info.name} — ALREADY ON THE RIG</span>
-          <span class="chest-reveal-buff">DUPLICATE → +${fmt(info.refund)} coins</span>
+          <span class="chest-reveal-buff">DUPLICATE → +${fmt(info.refund)} metal nuts</span>
         </div>
-        <p>Duplicate recruits are converted into coins automatically. Higher classes pay out bigger bounties.</p>`;
+        <p>Duplicate recruits are converted into metal nuts automatically. Higher classes pay out bigger bounties.</p>`;
     this.openModal({
       eyebrow: 'RECRUITMENT',
       title: chest.name,
@@ -893,7 +907,7 @@ export class UI {
       r.towerBtn.disabled = false;
     } else {
       setText(r.towerFloorText, 'SEALED · OPENS AT LV.5');
-      setText(r.towerRewardText, 'Coin, ore and unique vault gear inside');
+      setText(r.towerRewardText, 'Metal nuts, ore and unique vault gear inside');
       setText(r.towerBtn, 'LV.5');
       r.towerBtn.disabled = true;
     }
@@ -935,7 +949,7 @@ export class UI {
       name.querySelector('.z-dot').style.boxShadow = unlocked ? `0 0 6px ${z.accent}` : 'none';
       if (unlocked) {
         btn.classList.remove('ready');
-        sub.textContent = `${z.unlock ? `${z.baseHp} HP` : 'STARTING GROUND'} · WAVE ${c.waves[i]} · ~${fmt(z.caps)} coins/kill`;
+        sub.textContent = `${z.unlock ? `${z.baseHp} HP` : 'STARTING GROUND'} · WAVE ${c.waves[i]} · ~${fmt(z.caps)} metal nuts/kill`;
         if (i === c.zone) {
           status.innerHTML = `<b>ACTIVE</b>${z.enemies[0]}`;
           status.classList.add('active-tag');
@@ -948,8 +962,8 @@ export class UI {
         const ready = canAfford(s, { caps: req.caps, ...req.ore });
         btn.classList.toggle('ready', ready);
         status.classList.remove('active-tag');
-        sub.textContent = `${z.baseDmg} DMG · ${fmt(z.caps)} coins/kill · ${ORES[z.ore].name}`;
-        status.innerHTML = ready ? `<b>UNLOCK</b>${fmt(req.caps)} COINS` : `<b>LOCKED</b>${fmt(req.caps)} COINS`;
+        sub.textContent = `${z.baseDmg} DMG · ${fmt(z.caps)} metal nuts/kill · ${ORES[z.ore].name}`;
+        status.innerHTML = ready ? `<b>UNLOCK</b>${fmt(req.caps)} NUTS` : `<b>LOCKED</b>${fmt(req.caps)} NUTS`;
       }
     });
   }
@@ -1015,12 +1029,11 @@ export class UI {
     const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
     const rarity = rarityOf(item);
     const equipped = this.s.loadout?.[item.slot] === item.id;
-    const tier = item.classId ? tierLabel(item.classId) : '';
     return `
       <div class="loot-card rarity-${rarity.id}${equipped ? ' equipped' : ''}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
         <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
         <strong class="lc-name">${item.name}</strong>
-        <span class="lc-slot">${slot.name}${tier ? `<i class="lc-tier rank-${classTierRank(item)}">${tier}</i>` : ''}</span>
+        <span class="lc-slot">${slot.name}${tierChip(item)}</span>
         <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
         <div class="lc-actions">
           <button class="mini-btn" type="button" data-action="${equipped ? 'unequip' : 'equiploot'}" data-id="${item.id}" data-slot="${item.slot}">${equipped ? 'REMOVE' : 'EQUIP'}</button>
@@ -1078,7 +1091,6 @@ export class UI {
   offerCard(item, index) {
     const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
     const rarity = rarityOf(item);
-    const tier = item.classId ? tierLabel(item.classId) : '';
     const rank = classTierRank(item);
     const classLabel = item.classId
       ? (COMBAT_WEAPON_MAP[item.classId]?.name || item.classId.toUpperCase())
@@ -1088,7 +1100,7 @@ export class UI {
       <div class="loot-card offer-card rarity-${rarity.id}${item.unique ? ' has-unique' : ''}" style="--rarity:${rarity.color}">
         <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span>${item.unique ? '<span class="lc-unique">✦ UNIQUE</span>' : ''}<span class="lc-level">LV.${item.level}</span></div>
         <strong class="lc-name">${item.name}</strong>
-        <span class="lc-slot">${slot.name}${classLabel ? ` · ${classLabel}` : ''}${tier ? `<i class="lc-tier rank-${rank}">${tier}</i>` : ''}</span>
+        <span class="lc-slot">${slot.name}${classLabel ? ` · ${classLabel}` : ''}${tierChip(item)}</span>
         <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
         <div class="offer-foot">
           <span class="offer-price">CLASS ${rank + 1} · ${fmt(price)} ISO</span>
@@ -1255,7 +1267,7 @@ export class UI {
     const gs = gearStats(s);
     const bonuses = Object.entries(gs)
       .map(([key, value]) => {
-        const label = { damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL', defense: 'DEF', ore: 'ORE', caps: 'COINS', xp: 'XP', power: 'POWER', yield: 'YIELD', cooldown: 'SWING' }[key] || key.toUpperCase();
+        const label = { damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL', defense: 'DEF', ore: 'ORE', caps: 'NUTS', xp: 'XP', power: 'POWER', yield: 'YIELD', cooldown: 'SWING' }[key] || key.toUpperCase();
         const pct = ['damage', 'crit', 'speed', 'defense', 'ore', 'caps', 'xp', 'power', 'yield', 'cooldown'].includes(key);
         return `<span>${label} ${pct ? `+${(value * 100).toFixed(1)}%` : `+${Math.round(value)}`}</span>`;
       })
@@ -1281,7 +1293,7 @@ export class UI {
     const list = (items || []).filter(Boolean);
     this.lastLoot = { ids: list.map((item) => item.id), title };
     const body = list.length
-      ? `<p>Recovered <strong>${list.length}</strong> item${list.length > 1 ? 's' : ''}. Equip now or scrap for coins.</p>
+      ? `<p>Recovered <strong>${list.length}</strong> item${list.length > 1 ? 's' : ''}. Equip now or scrap for metal nuts.</p>
          <div class="loot-grid">${list.map((item) => this.lootCard(item)).join('')}</div>`
       : '<p>The run came back empty. The wastes keep what they take.</p>';
     this.openModal({
