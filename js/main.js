@@ -1,10 +1,12 @@
 import {
   LAYERS, ZONES, ORES, ORE_ORDER, STIM_MAX, PERKS, ATTRIBUTES, OUTFITS,
+  MINING_TOOLS, COMBAT_WEAPONS, GEAR_SLOTS, MAX_INVENTORY, RARITIES,
   fmt, costLabel, canAfford, spend, makeEnemy, playerStats,
-  playerAttackInterval, layerMaxHp, strikeYield, pickPower,
-  drillRate, overloadGain, xpNeeded, xpMultiplier, outfitCost, outfitLevel,
+  playerAttackInterval, layerMaxHp, strikeYield, pickPower, miningTool, combatWeapon, toolCooldown,
+  drillRate, salvageCapsRate, overloadGain, xpNeeded, xpMultiplier, outfitCost, outfitLevel,
   attrLevel, perkRank, pickaxeCost, crewCost, drillCost,
-  weaponCost, armorCost, stimCost,
+  weaponCost, armorCost, stimCost, makeLootItem, lootRunCost, gearStats, gearScore,
+  gearStatLines, rarityOf, scrapValue, equippedItem,
 } from './data.js';
 import { loadState, persist, wipeSave, offlineReport, resetProgress, formatGainList } from './state.js';
 import { GameAudio } from './audio.js';
@@ -85,6 +87,7 @@ class Game {
     const dt = Math.min(1.5, Math.max(0, (now - this.lastTick) / 1000));
     this.lastTick = now;
     this.passiveGain(dt);
+    this.tickMining(now);
     this.tickCombat(now, dt);
     if (now - this.lastUI > 150) {
       this.ui.render();
@@ -106,18 +109,41 @@ class Game {
       s.ores[ore] += amount;
       s.stats.totalMined += amount;
     }
+    const caps = salvageCapsRate(s) * dt;
+    if (caps > 0) {
+      s.caps += caps;
+      s.stats.totalCaps = (s.stats.totalCaps || 0) + caps;
+    }
   }
 
   /* ── mining ──────────────────────────────────────────────── */
-  strikeMine() {
-    const now = performance.now();
-    if (now - this.lastStrike < 45) return;
-    this.lastStrike = now;
+  tickMining(now) {
     const s = this.state;
+    if (!s.autoMine) return;
+    if (now - this.lastStrike >= toolCooldown(s)) this.strikeMine(true, now);
+  }
+
+  toggleAutoMine() {
+    const s = this.state;
+    s.autoMine = !s.autoMine;
+    this.audio.tone({ freq: s.autoMine ? 420 : 240, dur: 0.08, type: 'triangle', vol: 0.16 });
+    this.ui.toast(s.autoMine ? 'AUTO-MINE ENGAGED — the rig swings itself' : 'AUTO-MINE DISENGAGED', s.autoMine ? 'good' : '');
+    this.log(`Auto-mining ${s.autoMine ? 'engaged' : 'disengaged'}.`, '');
+    if (s.autoMine) this.strikeMine(true);
+    this.ui.render();
+    this.saveNow();
+  }
+
+  strikeMine(auto = false, now = performance.now()) {
+    const s = this.state;
+    const tool = miningTool(s);
+    const cooldown = toolCooldown(s);
+    if (now - this.lastStrike < cooldown) return;
+    this.lastStrike = now;
     const i = s.layer;
     const layer = LAYERS[i];
     const yieldAmt = strikeYield(s, i);
-    const crit = Math.random() < 0.07;
+    const crit = Math.random() < 0.07 + tool.critBonus;
     const gained = yieldAmt * (crit ? 3 : 1);
     s.ores[layer.ore] += gained;
     s.stats.totalMined += gained;
@@ -135,24 +161,26 @@ class Game {
       s.nodes[i] = (s.nodes[i] || 0) + 1;
       s.veinHp[i] = layerMaxHp(s, i);
       this.mineRenderer.veinBreak();
-      this.audio.shatter();
-      this.log(`Vein shattered. Richness ×${(1 + 0.04 * s.nodes[i]).toFixed(2)} · +${fmt(bonus)} ${ORES[layer.ore].name}.`, 'good');
-    } else {
+      if (!auto) {
+        this.audio.shatter();
+        this.log(`Vein shattered. Richness ×${(1 + 0.04 * s.nodes[i]).toFixed(2)} · +${fmt(bonus)} ${ORES[layer.ore].name}.`, 'good');
+      }
+    } else if (!auto || Math.random() < 0.35) {
       this.audio[crit ? 'crit' : 'strike']();
     }
     this.mineRenderer.strike();
-    this.mineRenderer.floatOre(Math.round(gained), layer.ore, crit);
-    if (broke) {
+    if (!auto || broke || crit) this.mineRenderer.floatOre(Math.round(gained), layer.ore, crit);
+    if (broke && !auto) {
       this.mineRenderer.floatOre(Math.round(yieldAmt * 10), layer.ore, true);
       this.ui.toast(`VEIN SHATTERED · +${fmt(Math.round(yieldAmt * 10))} ${ORES[layer.ore].name}`, 'good');
-    } else if (crit) {
+    } else if (crit && !auto) {
       this.ui.toast(`CRITICAL SEAM · +${fmt(Math.round(gained))} ${ORES[layer.ore].name}`, 'good');
     }
     if ((s.stats.clicks || 0) === 1) {
-      this.log('First swing. Keep the pick moving — the vein gives more the deeper you go.', 'good');
+      this.log('First swing. Keep the tool moving — the vein gives more the deeper you go.', 'good');
     }
     this.gainXp(1 + (broke ? 12 + i * 2 : 0));
-    this.ui.render();
+    if (!auto) this.ui.render();
   }
 
   /* ── RPG progression ─────────────────────────────────────── */
@@ -367,9 +395,10 @@ class Game {
     spend(s, cost);
     s.pickaxe += 1;
     this.audio.buy();
-    this.log(`Pickaxe upgraded to Lv.${s.pickaxe}. Vein damage ${fmt(pickPower(s), 1)}.`, 'good');
-    if (s.pickaxe === 3) this.ui.toast('Pickaxe Lv.3 — Rust Flats can be opened.', 'good');
+    this.log(`Tool tuning raised to Lv.${s.pickaxe}. Vein damage ${fmt(pickPower(s), 1)}.`, 'good');
+    if (s.pickaxe === 3) this.ui.toast('Tool tuning Lv.3 — Rust Flats can be opened.', 'good');
     this.ui.render();
+    this.saveNow();
   }
 
   buyCrew() {
@@ -382,6 +411,7 @@ class Game {
     this.ui.toast(`Survivor ${s.crew} joined · ore yield +${s.crew * 8}%`, 'good');
     this.log(`Crew expanded to ${s.crew}. Every ore source is ${s.crew * 8}% richer.`, 'good');
     this.ui.render();
+    this.saveNow();
   }
 
   buyDrill(index) {
@@ -399,6 +429,7 @@ class Game {
     const layer = LAYERS[index];
     this.log(`Drill rig ${s.drills[index]} online in ${layer.name} · +${fmt(drillRate(s, index), 2)} ${ORES[layer.ore].name}/s.`, 'good');
     this.ui.render();
+    this.saveNow();
   }
 
   buyWeapon() {
@@ -409,8 +440,9 @@ class Game {
     s.combat.gear.weapon += 1;
     this.audio.buy();
     const stats = playerStats(s);
-    this.log(`Pipe axe reforged. Attack ${fmt(stats.attack, 1)}.`, 'good');
+    this.log(`${combatWeapon(s).name} tuned to Lv.${s.combat.gear.weapon}. Attack ${fmt(stats.attack, 1)}.`, 'good');
     this.ui.render();
+    this.saveNow();
   }
 
   buyArmor() {
@@ -425,6 +457,7 @@ class Game {
     this.audio.buy();
     this.log(`Rad plate fitted. HP ${fmt(stats.maxHp)} · ${Math.round(stats.defense * 100)}% resist.`, 'good');
     this.ui.render();
+    this.saveNow();
   }
 
   buyStim() {
@@ -442,6 +475,141 @@ class Game {
     this.ui.toast(`Stim kit built · +${stats.healPerKill} HP per kill`, 'good');
     this.log(`Stim kit rebuilt. Heals ${stats.healPerKill} HP after each kill; reboot time ${stats.deathMs / 1000}s.`, 'good');
     this.ui.render();
+    this.saveNow();
+  }
+
+  equipTool(id) {
+    const s = this.state;
+    const tool = MINING_TOOLS.find((t) => t.id === id);
+    if (!tool) return;
+    if (!s.tools[tool.id]) {
+      const cost = tool.unlock || {};
+      if (!canAfford(s, cost)) return this.deny(cost);
+      spend(s, cost);
+      s.tools[tool.id] = true;
+      this.audio.buy();
+      this.ui.toast(`SCHEMATIC RECOVERED · ${tool.name}`, 'lore');
+      this.log(`${tool.name} built from salvage. ${tool.stats}.`, 'good');
+    } else if (s.equippedTool === tool.id && !s.loadout.tool) {
+      return;
+    }
+    s.equippedTool = tool.id;
+    s.loadout.tool = null;
+    this.audio.tone({ freq: 360, end: 520, dur: 0.08, type: 'triangle', vol: 0.16 });
+    this.ui.toast(`${tool.name} equipped`, 'good');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  equipWeapon(id) {
+    const s = this.state;
+    const weapon = COMBAT_WEAPONS.find((w) => w.id === id);
+    if (!weapon) return;
+    if (!s.weapons[weapon.id]) {
+      const cost = weapon.unlock || {};
+      if (!canAfford(s, cost)) return this.deny(cost);
+      spend(s, cost);
+      s.weapons[weapon.id] = true;
+      this.audio.buy();
+      this.ui.toast(`SCHEMATIC RECOVERED · ${weapon.name}`, 'lore');
+      this.log(`${weapon.name} built from salvage. ${weapon.stats}.`, 'good');
+    } else if (s.equippedWeapon === weapon.id && !s.loadout.weapon) {
+      return;
+    }
+    s.equippedWeapon = weapon.id;
+    s.loadout.weapon = null;
+    this.audio.tone({ freq: 300, end: 180, dur: 0.1, type: 'sawtooth', vol: 0.14 });
+    this.ui.toast(`${weapon.name} equipped`, 'good');
+    this.ui.render();
+    this.saveNow();
+  }
+
+  /* ── loot & loadout ──────────────────────────────────────── */
+  addLoot(item) {
+    const s = this.state;
+    if (!item) return false;
+    if ((s.inventory || []).length >= MAX_INVENTORY) {
+      const value = scrapValue(item);
+      s.caps += value;
+      s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
+      this.ui.toast(`PACK FULL · ${item.name} auto-scrapped +${fmt(value)} caps`, 'bad');
+      return false;
+    }
+    s.inventory.push(item);
+    return true;
+  }
+
+  salvageRun() {
+    const s = this.state;
+    const cost = lootRunCost(s);
+    if (!canAfford(s, { caps: cost })) {
+      this.audio.error();
+      this.ui.toast(`A salvage run costs ${fmt(cost)} caps.`, 'bad');
+      return;
+    }
+    spend(s, { caps: cost });
+    const count = 1 + (Math.random() < 0.18 ? 1 : 0);
+    const items = [];
+    for (let i = 0; i < count; i++) {
+      const item = makeLootItem(s);
+      if (item && this.addLoot(item)) items.push(item);
+    }
+    this.audio.buy();
+    if (items.length) {
+      this.log(`Salvage run recovered ${items.map((item) => item.name).join(' · ')}.`, 'good');
+      this.ui.toast(`SALVAGE RUN · ${items.length} item${items.length > 1 ? 's' : ''} recovered`, 'lore');
+    } else {
+      this.log('Salvage run recovered nothing but rust and regret.', 'alert');
+      this.ui.toast('SALVAGE RUN · nothing usable', 'bad');
+    }
+    this.ui.render();
+    this.saveNow();
+    this.ui.openLootResults(items, 'SALVAGE RUN');
+  }
+
+  equipLoot(id) {
+    const s = this.state;
+    const item = s.inventory.find((entry) => entry.id === id);
+    if (!item) return;
+    s.loadout[item.slot] = item.id;
+    const stats = playerStats(s);
+    s.combat.hp = Math.min(stats.maxHp, Math.max(1, s.combat.hp));
+    this.audio.tone({ freq: 300, end: 480, dur: 0.09, type: 'triangle', vol: 0.16 });
+    this.ui.toast(`EQUIPPED · ${item.name}`, 'good');
+    this.log(`Fitted ${item.name} (${rarityOf(item).name}) to ${item.slot}. ${gearStatLines(item).join(' · ')}.`, 'good');
+    this.ui.render();
+    this.saveNow();
+    this.ui.refreshOpenGear();
+  }
+
+  unequipSlot(slot) {
+    const s = this.state;
+    const item = equippedItem(s, slot);
+    if (!item) return;
+    s.loadout[slot] = null;
+    this.audio.tone({ freq: 260, end: 180, dur: 0.08, type: 'triangle', vol: 0.14 });
+    this.ui.toast(`REMOVED · ${item.name}`, '');
+    this.ui.render();
+    this.saveNow();
+    this.ui.refreshOpenGear();
+  }
+
+  scrapLoot(id) {
+    const s = this.state;
+    const index = s.inventory.findIndex((entry) => entry.id === id);
+    if (index < 0) return;
+    const item = s.inventory[index];
+    const value = scrapValue(item);
+    s.inventory.splice(index, 1);
+    if (s.loadout[item.slot] === id) s.loadout[item.slot] = null;
+    s.caps += value;
+    s.stats.totalCaps = (s.stats.totalCaps || 0) + value;
+    this.audio.buy();
+    this.ui.toast(`SCRAPPED · ${item.name} · +${fmt(value)} caps`, '');
+    this.log(`Scrapped ${item.name} for ${fmt(value)} caps.`, '');
+    this.ui.render();
+    this.saveNow();
+    this.ui.refreshOpenGear();
   }
 
   deny(cost) {
@@ -549,6 +717,19 @@ class Game {
     if (c.waves[c.zone] % 10 === 1 && c.waves[c.zone] > 1) {
       this.log(`Wave ${c.waves[c.zone]} in ${zone.name}. Something bigger is coming.`, 'alert');
     }
+
+    const dropChance = enemy.boss ? 1 : 0.12;
+    if (Math.random() < dropChance) {
+      const drops = enemy.boss ? 2 : 1;
+      for (let i = 0; i < drops; i++) {
+        const item = makeLootItem(s, { boss: enemy.boss });
+        if (!item || !this.addLoot(item)) continue;
+        const rarity = rarityOf(item);
+        this.ui.toast(`LOOT · ${item.name} · ${rarity.name.toUpperCase()}`, rarity.rank >= 2 ? 'lore' : 'good');
+        this.log(`Recovered ${item.name} (${rarity.name} ${item.slot}). ${gearStatLines(item).join(' · ')}.`, rarity.rank >= 2 ? 'lore' : 'good');
+      }
+    }
+
     c.enemy = null;
     this.nextSpawn = now + 700;
     this.ui.render();
@@ -561,6 +742,7 @@ class Game {
     c.hp = 0;
     c.deadUntil = now + stats.deathMs;
     c.enemy = null;
+    s.stats.deaths = (s.stats.deaths || 0) + 1;
     this.nextSpawn = now + stats.deathMs + 300;
     this.combatRenderer.playerDied();
     this.audio.death();
@@ -663,6 +845,24 @@ class Game {
     this.log(`The core detonated. ${gain} shard${gain > 1 ? 's' : ''} recovered · permanent output +${Math.round(next.shards * 10)}%.`, 'lore');
     this.ui.render();
     this.saveNow();
+    if (next.stats.detonations === 1) this.showVictory(gain);
+  }
+
+  showVictory(gain) {
+    const s = this.state;
+    this.ui.openModal({
+      eyebrow: 'PROTOCOL COMPLETE',
+      title: 'The core is ash.',
+      body: `
+        <p>You broke the Black Vault, overloaded the reactor, and walked out of the fire with
+        <span class="gain">${gain} core shard${gain > 1 ? 's' : ''}</span>.</p>
+        <p>Your survivor keeps their <strong>level, attributes, perks, outfits, tool schematics and pack</strong>.
+        Ore, rigs, territory and combat tuning reset for the next descent.</p>
+        <p>Each shard is permanent: <strong>+10% ore yield</strong> and <strong>+8% damage</strong>.
+        Keep running salvage, keep fitting better gear, and overload again when the vault lets you back in.</p>
+        <p><strong>ASHFALL // SALVAGE PROTOCOL</strong> — run complete. The wastes are still listening.</p>`,
+      actions: [{ label: 'BACK TO THE WASTES', kind: '' }],
+    });
   }
 
   confirmReset() {

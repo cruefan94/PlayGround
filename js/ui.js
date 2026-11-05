@@ -1,9 +1,11 @@
 import {
   ORES, ORE_ORDER, LAYERS, ZONES, STIM_MAX, OUTFITS, ATTRIBUTES, PERKS,
+  MINING_TOOLS, COMBAT_WEAPONS, GEAR_SLOTS, MAX_INVENTORY,
   fmt, fmtRate, costLabel, canAfford, pickPower, pickaxeCost, crewCost,
-  drillCost, drillRate, weaponCost, armorCost, stimCost, playerStats,
-  nodeRichness, layerMaxHp, strikeYield, overloadGain, playerAttackInterval,
+  drillCost, drillRate, weaponCost, armorCost, stimCost, playerStats, miningTool, combatWeapon,
+  salvageCapsRate, nodeRichness, layerMaxHp, strikeYield, overloadGain, playerAttackInterval,
   xpNeeded, outfitCost, outfitLevel, attrLevel, perkRank, levelHpMult, levelAtkMult,
+  rarityOf, gearStats, gearScore, gearStatLines, scrapValue, lootRunCost, equippedItem,
 } from './data.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,14 +17,18 @@ export class UI {
     this.toastId = 0;
     this.lastLogId = -1;
     this.saveFlashUntil = 0;
+    this.modalKind = null;
+    this.lastLoot = null;
     this.refs = {};
     this.buildResources();
     this.buildLayers();
     this.buildCards();
+    this.buildEquipmentCards();
     this.buildAttributes();
     this.buildOutfits();
     this.buildDrills();
     this.buildZones();
+    this.buildLoadout();
     this.cacheRefs();
     this.bind();
     this.render();
@@ -90,8 +96,8 @@ export class UI {
         <span class="card-cta" data-cta>UPGRADE</span>
       </button>`;
 
-    $('toolCards').innerHTML = fmtCard('pickaxe', '⚒', 'PICKAXE') + fmtCard('crew', '☗', 'SURVIVOR CREW');
-    $('gearCards').innerHTML = fmtCard('weapon', '⚔', 'PIPE AXE') + fmtCard('armor', '⛨', 'RAD PLATE') + fmtCard('stim', '✚', 'STIM KIT');
+    $('toolCards').innerHTML = fmtCard('pickaxe', '⚒', 'TOOL TUNING') + fmtCard('crew', '☗', 'SURVIVOR CREW');
+    $('gearCards').innerHTML = fmtCard('weapon', '⚔', 'WEAPON TUNING') + fmtCard('armor', '⛨', 'RAD PLATE') + fmtCard('stim', '✚', 'STIM KIT');
 
     this.cardEls = {};
     for (const id of ['pickaxe', 'crew', 'weapon', 'armor', 'stim']) {
@@ -104,6 +110,32 @@ export class UI {
         cta: card.querySelector('[data-cta]'),
       };
     }
+  }
+
+  buildEquipmentCards() {
+    const card = (item, action) => `
+      <button class="card equip-card" type="button" data-action="${action}" data-id="${item.id}" id="${action}-${item.id}" title="${item.blurb}">
+        <span class="card-icon">${item.icon}</span>
+        <span class="card-body">
+          <span class="card-top"><span class="card-title">${item.name}</span><span class="card-lvl" data-tier>${item.tier}</span></span>
+          <span class="card-desc" data-desc></span>
+          <span class="card-cost" data-cost></span>
+        </span>
+        <span class="card-cta" data-cta>EQUIP</span>
+      </button>`;
+    $('miningToolCards').innerHTML = MINING_TOOLS.map((item) => card(item, 'equiptool')).join('');
+    $('combatWeaponCards').innerHTML = COMBAT_WEAPONS.map((item) => card(item, 'equipweapon')).join('');
+    const collect = (list, action) => Object.fromEntries(list.map((item) => {
+      const el = $(`${action}-${item.id}`);
+      return [item.id, {
+        card: el,
+        desc: el.querySelector('[data-desc]'),
+        cost: el.querySelector('[data-cost]'),
+        cta: el.querySelector('[data-cta]'),
+      }];
+    }));
+    this.toolCardEls = collect(MINING_TOOLS, 'equiptool');
+    this.weaponCardEls = collect(COMBAT_WEAPONS, 'equipweapon');
   }
 
   buildAttributes() {
@@ -188,6 +220,32 @@ export class UI {
     });
   }
 
+  buildLoadout() {
+    const wrap = $('loadoutStrip');
+    this.loadoutEls = {};
+    if (!wrap) return;
+    for (const slot of GEAR_SLOTS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'loadout-slot';
+      btn.dataset.action = 'gear';
+      btn.dataset.slot = slot.id;
+      btn.innerHTML = `
+        <span class="ls-icon">${slot.icon}</span>
+        <span class="ls-body">
+          <span class="ls-slot">${slot.name}</span>
+          <span class="ls-name" data-name>EMPTY</span>
+        </span>
+        <span class="ls-rarity" data-rarity></span>`;
+      wrap.append(btn);
+      this.loadoutEls[slot.id] = {
+        btn,
+        name: btn.querySelector('[data-name]'),
+        rarity: btn.querySelector('[data-rarity]'),
+      };
+    }
+  }
+
   cacheRefs() {
     const r = this.refs;
     r.layerBadge = $('layerBadge');
@@ -201,6 +259,14 @@ export class UI {
     r.depthText = $('depthText');
     r.objectiveText = $('objectiveText');
     r.sceneTip = $('sceneTip');
+    r.autoMineBtn = $('autoMineBtn');
+    r.autoMineLabel = $('autoMineLabel');
+    r.toolSummary = $('toolSummary');
+    r.weaponSummary = $('weaponSummary');
+    r.gearScore = $('gearScore');
+    r.packSummary = $('packSummary');
+    r.salvageCost = $('salvageCost');
+    r.salvageRunBtn = $('salvageRunBtn');
     r.drillRateTotal = $('drillRateTotal');
     r.crewBadge = $('crewBadge');
     r.coreDesc = $('coreDesc');
@@ -266,6 +332,7 @@ export class UI {
 
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return;
+      if (!$('modal').hidden) return;
       if (e.code === 'Space') {
         e.preventDefault();
         if (document.getElementById('app').dataset.tab === 'mine' || window.innerWidth > 980) this.game.strikeMine();
@@ -296,6 +363,14 @@ export class UI {
       case 'strike': g.strikeMine(); break;
       case 'attack': g.attack(); break;
       case 'auto': g.toggleAuto(); break;
+      case 'automine': g.toggleAutoMine(); break;
+      case 'equiptool': g.equipTool(target?.dataset.id); break;
+      case 'equipweapon': g.equipWeapon(target?.dataset.id); break;
+      case 'gear': this.openGear(); break;
+      case 'salvagerun': g.salvageRun(); break;
+      case 'equiploot': g.equipLoot(target?.dataset.id); break;
+      case 'unequip': g.unequipSlot(target?.dataset.slot); break;
+      case 'scraploot': g.scrapLoot(target?.dataset.id); break;
       case 'pickaxe': g.buyPickaxe(); break;
       case 'crew': g.buyCrew(); break;
       case 'weapon': g.buyWeapon(); break;
@@ -329,6 +404,7 @@ export class UI {
     this.renderResources();
     this.renderMine();
     this.renderForge();
+    this.renderLoadout();
     this.renderFight();
     this.renderLog();
     this.renderFooter();
@@ -353,8 +429,10 @@ export class UI {
       ref.chip.title = `${ORES[key].name}${rate > 0 ? ` · ${fmtRate(rate)}` : ''}`;
     }
     const caps = this.resEls.caps;
+    const capsRate = salvageCapsRate(s);
     setText(caps.val, fmt(s.caps));
-    caps.chip.title = `Salvage caps (money) · earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
+    setText(caps.per, capsRate > 0 ? `+${fmtRate(capsRate)}` : '');
+    caps.chip.title = `Salvage caps (money) · ${capsRate > 0 ? `${fmtRate(capsRate)} from salvage · ` : ''}earned in combat, spent on upgrades and outfits. ${fmt(s.stats.totalCaps || 0)} lifetime.`;
     const shards = this.resEls.shards;
     shards.chip.style.display = showShards ? '' : 'none';
     setText(shards.val, fmt(s.shards));
@@ -380,6 +458,10 @@ export class UI {
     setText(r.depthText, `${layer.name.toUpperCase()} // ${layer.depth}M`);
     r.sceneTip.classList.toggle('hidden', (s.stats.clicks || 0) > 3);
     setText(r.objectiveText, this.objectiveText());
+    const autoMine = !!s.autoMine;
+    r.autoMineBtn.classList.toggle('on', autoMine);
+    r.autoMineBtn.setAttribute('aria-pressed', String(autoMine));
+    setText(r.autoMineLabel, autoMine ? 'AUTO-MINE: ON' : 'AUTO-MINE: OFF');
 
     this.layerEls.forEach(({ btn, req }, i) => {
       const l = LAYERS[i];
@@ -441,10 +523,10 @@ export class UI {
     const pcAff = canAfford(s, pc);
     const pick = this.cardEls.pickaxe;
     pick.lvl.textContent = `LV.${s.pickaxe}`;
-    pick.desc.innerHTML = `Power <b>${fmt(pickPower(s), 1)}</b> → <b>${fmt(2 + 2.3 * s.pickaxe, 1)}</b> · cracks all ore veins`;
+    pick.desc.innerHTML = `All tools <b>${fmt(pickPower(s), 1)}</b> → <b>${fmt((2 + 2.3 * s.pickaxe) * miningTool(s).powerMult, 1)}</b> vein power · raises every seam`;
     pick.cost.textContent = costLabel(pc);
     pick.card.classList.toggle('affordable', pcAff);
-    pick.cta.textContent = 'UPGRADE';
+    setCta(pick.cta, 'UPGRADE', 'upgrade');
 
     // crew
     const cc = crewCost(s.crew);
@@ -454,28 +536,84 @@ export class UI {
     crew.desc.innerHTML = `Ore yield <b>+${s.crew * 8}%</b> → <b>+${(s.crew + 1) * 8}%</b> · survivors work the rigs`;
     crew.cost.textContent = costLabel(cc);
     crew.card.classList.toggle('affordable', ccAff);
-    crew.cta.textContent = 'RECRUIT';
+    setCta(crew.cta, 'RECRUIT', 'upgrade');
     setText(r.crewBadge, `CREW ${s.crew}`);
-    setText(r.drillRateTotal, `${fmtRate(LAYERS.reduce((sum, _, i) => sum + (s.drills[i] || 0) * drillRate(s, i), 0))}`);
+    const oreRate = LAYERS.reduce((sum, _, i) => sum + (s.drills[i] || 0) * drillRate(s, i), 0);
+    const capsRate = salvageCapsRate(s);
+    setText(r.drillRateTotal, `${fmtRate(oreRate)} ore · ${fmtRate(capsRate)} caps`);
+
+    // mining tools
+    const equippedTool = miningTool(s);
+    const toolsReady = MINING_TOOLS.filter((tool) => s.tools?.[tool.id]).length;
+    setText(r.toolSummary, `${toolsReady} / ${MINING_TOOLS.length} READY · ${equippedTool.name.toUpperCase()}`);
+    for (const tool of MINING_TOOLS) {
+      const els = this.toolCardEls[tool.id];
+      const unlocked = !!s.tools?.[tool.id];
+      const equipped = s.equippedTool === tool.id;
+      els.desc.textContent = tool.stats;
+      els.card.classList.toggle('equipped', equipped);
+      els.card.classList.toggle('locked', !unlocked);
+      els.card.classList.toggle('affordable', !unlocked && canAfford(s, tool.unlock || {}));
+      if (equipped) {
+        els.cost.textContent = 'EQUIPPED';
+        setCta(els.cta, 'IN USE', 'inuse');
+      } else if (unlocked) {
+        els.cost.textContent = 'SCHEMATIC OWNED';
+        setCta(els.cta, 'EQUIP', 'equip');
+      } else {
+        els.cost.textContent = costLabel(tool.unlock || {});
+        setCta(els.cta, 'UNLOCK', 'unlock');
+      }
+    }
+
+    // combat weapons
+    const equippedWeapon = combatWeapon(s);
+    const weaponsReady = COMBAT_WEAPONS.filter((weapon) => s.weapons?.[weapon.id]).length;
+    setText(r.weaponSummary, `${weaponsReady} / ${COMBAT_WEAPONS.length} READY · ${equippedWeapon.name.toUpperCase()}`);
+    for (const weapon of COMBAT_WEAPONS) {
+      const els = this.weaponCardEls[weapon.id];
+      const unlocked = !!s.weapons?.[weapon.id];
+      const equipped = s.equippedWeapon === weapon.id;
+      const swing = Math.max(220, Math.round((750 * weapon.speedMult) / (p.speedMult || 1)));
+      const crit = Math.max(0, p.crit - equippedWeapon.critBonus + weapon.critBonus);
+      els.desc.textContent = `DMG ×${weapon.damageMult.toFixed(2)} · ${(swing / 1000).toFixed(2)}s swing · ${Math.round(crit * 100)}% crit`;
+      els.card.classList.toggle('equipped', equipped);
+      els.card.classList.toggle('locked', !unlocked);
+      els.card.classList.toggle('affordable', !unlocked && canAfford(s, weapon.unlock || {}));
+      if (equipped) {
+        els.cost.textContent = 'EQUIPPED';
+        setCta(els.cta, 'IN USE', 'inuse');
+      } else if (unlocked) {
+        els.cost.textContent = 'SCHEMATIC OWNED';
+        setCta(els.cta, 'EQUIP', 'equip');
+      } else {
+        els.cost.textContent = costLabel(weapon.unlock || {});
+        setCta(els.cta, 'UNLOCK', 'unlock');
+      }
+    }
 
     // gear
     const wc = weaponCost(s.combat.gear.weapon);
     const wAff = canAfford(s, wc);
     const weapon = this.cardEls.weapon;
     weapon.lvl.textContent = `LV.${s.combat.gear.weapon}`;
-    weapon.desc.innerHTML = `Damage <b>${fmt(p.attack, 1)}</b> · ${Math.round(p.crit * 100)}% crit · ${(playerAttackInterval(s) / 1000).toFixed(2)}s swing`;
+    weapon.desc.innerHTML = `All weapons · Damage <b>${fmt(p.attack, 1)}</b> · ${Math.round(p.crit * 100)}% crit · ${(playerAttackInterval(s) / 1000).toFixed(2)}s swing`;
     weapon.cost.textContent = costLabel(wc);
     weapon.card.classList.toggle('affordable', wAff);
-    weapon.cta.textContent = 'FORGE';
+    setCta(weapon.cta, 'FORGE', 'upgrade');
 
     const ac = armorCost(s.combat.gear.armor);
     const aAff = canAfford(s, ac);
     const armor = this.cardEls.armor;
+    const nextArmor = playerStats({
+      ...s,
+      combat: { ...s.combat, gear: { ...s.combat.gear, armor: s.combat.gear.armor + 1 } },
+    });
     armor.lvl.textContent = `LV.${s.combat.gear.armor}`;
-    armor.desc.innerHTML = `HP <b>${fmt(p.maxHp)}</b> → <b>${fmt(p.maxHp + 30)}</b> · ${Math.round(p.defense * 100)}% damage resist`;
+    armor.desc.innerHTML = `HP <b>${fmt(p.maxHp)}</b> → <b>${fmt(nextArmor.maxHp)}</b> · ${Math.round(p.defense * 100)}% damage resist`;
     armor.cost.textContent = costLabel(ac);
     armor.card.classList.toggle('affordable', aAff);
-    armor.cta.textContent = 'FORGE';
+    setCta(armor.cta, 'FORGE', 'upgrade');
 
     const stimMax = s.combat.gear.stim >= STIM_MAX;
     const stim = this.cardEls.stim;
@@ -485,7 +623,7 @@ export class UI {
       stim.cost.textContent = 'Max tier reached';
       stim.card.classList.remove('affordable');
       stim.card.classList.add('maxed');
-      stim.cta.textContent = 'MAX';
+      setCta(stim.cta, 'MAX', 'inuse');
     } else {
       const sc = stimCost(s.combat.gear.stim);
       const sAff = canAfford(s, sc);
@@ -493,7 +631,7 @@ export class UI {
       stim.cost.textContent = costLabel(sc);
       stim.card.classList.toggle('affordable', sAff);
       stim.card.classList.remove('maxed');
-      stim.cta.textContent = 'BUILD';
+      setCta(stim.cta, 'BUILD', 'upgrade');
     }
 
     // drills
@@ -530,14 +668,14 @@ export class UI {
       els.card.title = outfit.blurb;
       if (maxed) {
         setText(els.cost, 'Max tier reached');
-        setText(els.cta, 'MAX');
+        setCta(els.cta, 'MAX', 'inuse');
         els.card.classList.remove('affordable');
         els.card.classList.add('maxed');
       } else {
         const cost = outfitCost(outfit, lvl);
         const aff = canAfford(s, cost);
         setText(els.cost, costLabel(cost));
-        setText(els.cta, lvl > 0 ? 'UPGRADE' : 'CRAFT');
+        setCta(els.cta, lvl > 0 ? 'UPGRADE' : 'CRAFT', 'upgrade');
         els.card.classList.toggle('affordable', aff);
         els.card.classList.remove('maxed');
       }
@@ -556,6 +694,43 @@ export class UI {
     }
   }
 
+  loadoutScore() {
+    return GEAR_SLOTS.reduce((sum, slot) => {
+      const item = equippedItem(this.s, slot.id);
+      return sum + (item ? gearScore(item) : 0);
+    }, 0);
+  }
+
+  renderLoadout() {
+    const s = this.s;
+    const r = this.refs;
+    const score = this.loadoutScore();
+    setText(r.gearScore, `GEAR ${score}`);
+    setText(r.packSummary, `${(s.inventory || []).length} / ${MAX_INVENTORY} · GEAR ${score}`);
+    const cost = lootRunCost(s);
+    setText(r.salvageCost, fmt(cost));
+    r.salvageRunBtn?.classList.toggle('affordable', canAfford(s, { caps: cost }));
+    if (!this.loadoutEls) return;
+    for (const slot of GEAR_SLOTS) {
+      const els = this.loadoutEls[slot.id];
+      if (!els) continue;
+      const item = equippedItem(s, slot.id);
+      els.btn.classList.toggle('filled', !!item);
+      if (item) {
+        const rarity = rarityOf(item);
+        els.btn.style.setProperty('--rarity', rarity.color);
+        els.name.textContent = item.name.toUpperCase();
+        els.rarity.textContent = rarity.name.toUpperCase();
+        els.btn.title = `${item.name} · ${rarity.name} · ${gearStatLines(item).join(' · ')}`;
+      } else {
+        els.btn.style.removeProperty('--rarity');
+        els.name.textContent = 'EMPTY';
+        els.rarity.textContent = '';
+        els.btn.title = `No ${slot.name.toLowerCase()} fitted. Open loadout.`;
+      }
+    }
+  }
+
   renderFight() {
     const s = this.s;
     const c = s.combat;
@@ -563,7 +738,8 @@ export class UI {
     const zone = ZONES[c.zone] || ZONES[0];
     const stats = playerStats(s);
     const enemy = c.enemy;
-    const dead = c.deadUntil > Date.now();
+    const perfNow = performance.now();
+    const dead = c.deadUntil > perfNow;
 
     setText(r.zoneBadge, zone.name.toUpperCase());
     setText(r.zoneProgress, `${c.unlocked} / ${ZONES.length} SECURED`);
@@ -590,11 +766,11 @@ export class UI {
     setText(r.defStat, `${Math.round(stats.defense * 100)}%`);
     setText(r.killStat, fmt(s.stats.kills || 0));
     r.deathBanner.hidden = !dead;
-    if (dead) setText(r.deathBanner, `FLATLINED — REBOOTING ${Math.max(1, Math.ceil((c.deadUntil - Date.now()) / 1000))}s`);
+    if (dead) setText(r.deathBanner, `FLATLINED — REBOOTING ${Math.max(1, Math.ceil((c.deadUntil - perfNow) / 1000))}s`);
     r.autoBtn.classList.toggle('on', !!c.auto);
     r.autoBtn.setAttribute('aria-pressed', String(!!c.auto));
     setText(r.autoLabel, c.auto ? 'AUTO: ON' : 'AUTO: OFF');
-    const cooling = Date.now() < (c.nextPlayerAttack || 0);
+    const cooling = perfNow < (c.nextPlayerAttack || 0);
     r.attackBtn.classList.toggle('cooling', cooling && !dead);
 
     this.zoneEls.forEach(({ btn, name, sub, status }, i) => {
@@ -660,6 +836,110 @@ export class UI {
     return 'The core is charged. Overload the reactor for permanent shards.';
   }
 
+  gearSlotMarkup(slot) {
+    const item = equippedItem(this.s, slot.id);
+    if (!item) {
+      return `
+        <div class="gear-slot empty">
+          <span class="gs-icon">${slot.icon}</span>
+          <span class="gs-body"><span class="gs-slot">${slot.name}</span><strong>EMPTY</strong><small>No item fitted</small></span>
+        </div>`;
+    }
+    const rarity = rarityOf(item);
+    return `
+      <div class="gear-slot filled" style="--rarity:${rarity.color}">
+        <span class="gs-icon">${slot.icon}</span>
+        <span class="gs-body">
+          <span class="gs-slot">${slot.name} · <em style="color:${rarity.color}">${rarity.name}</em></span>
+          <strong>${item.name}</strong>
+          <small>${gearStatLines(item).join(' · ')}</small>
+        </span>
+        <button class="mini-btn" type="button" data-action="unequip" data-slot="${slot.id}">REMOVE</button>
+      </div>`;
+  }
+
+  lootCard(item) {
+    const slot = GEAR_SLOTS.find((entry) => entry.id === item.slot) || { name: item.slot.toUpperCase() };
+    const rarity = rarityOf(item);
+    const equipped = this.s.loadout?.[item.slot] === item.id;
+    return `
+      <div class="loot-card rarity-${rarity.id}${equipped ? ' equipped' : ''}" style="--rarity:${rarity.color}">
+        <div class="lc-top"><span class="lc-rarity">${rarity.name.toUpperCase()}</span><span class="lc-level">LV.${item.level}</span></div>
+        <strong class="lc-name">${item.name}</strong>
+        <span class="lc-slot">${slot.name}</span>
+        <div class="lc-stats">${gearStatLines(item).map((line) => `<span>${line}</span>`).join('')}</div>
+        <div class="lc-actions">
+          <button class="mini-btn" type="button" data-action="${equipped ? 'unequip' : 'equiploot'}" data-id="${item.id}" data-slot="${item.slot}">${equipped ? 'REMOVE' : 'EQUIP'}</button>
+          <button class="mini-btn danger" type="button" data-action="scraploot" data-id="${item.id}">SCRAP +${scrapValue(item)}</button>
+        </div>
+      </div>`;
+  }
+
+  openGear() {
+    const s = this.s;
+    const score = this.loadoutScore();
+    const cost = lootRunCost(s);
+    const inventory = s.inventory || [];
+    const pack = inventory.length
+      ? inventory.map((item) => this.lootCard(item)).join('')
+      : '<p class="empty-note">The pack is empty. Run salvage or kill hostiles to recover gear.</p>';
+    const slots = GEAR_SLOTS.map((slot) => this.gearSlotMarkup(slot)).join('');
+    const gs = gearStats(s);
+    const bonuses = Object.entries(gs)
+      .map(([key, value]) => {
+        const label = { damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL', defense: 'DEF', ore: 'ORE', caps: 'CAPS', xp: 'XP', power: 'POWER', yield: 'YIELD', cooldown: 'SWING' }[key] || key.toUpperCase();
+        const pct = ['damage', 'crit', 'speed', 'defense', 'ore', 'caps', 'xp', 'power', 'yield', 'cooldown'].includes(key);
+        return `<span>${label} ${pct ? `+${(value * 100).toFixed(1)}%` : `+${Math.round(value)}`}</span>`;
+      })
+      .join('');
+    this.openModal({
+      eyebrow: 'SURVIVOR LOADOUT',
+      title: `Gear score ${score}`,
+      kind: 'gear',
+      wide: true,
+      body: `
+        <div class="gear-summary">
+          <div><span>FITTED BONUSES</span><strong>${bonuses || 'No gear fitted'}</strong></div>
+          <div><span>CAPS</span><strong>${fmt(s.caps)}</strong></div>
+        </div>
+        <div class="gear-slots">${slots}</div>
+        <p class="section-label">SALVAGE PACK <span class="label-sub">${inventory.length} / ${MAX_INVENTORY} ITEMS</span></p>
+        <div class="loot-grid">${pack}</div>
+        <div class="loot-run">
+          <div><strong>SALVAGE RUN</strong><span>Spend caps to recover random weapons, tools and armor.</span></div>
+          <button class="btn small primary" type="button" data-action="salvagerun">RUN · ${fmt(cost)} CAPS</button>
+        </div>`,
+      actions: [{ label: 'CLOSE', kind: '' }],
+    });
+  }
+
+  openLootResults(items, title = 'Recovered gear') {
+    const list = (items || []).filter(Boolean);
+    this.lastLoot = { ids: list.map((item) => item.id), title };
+    const body = list.length
+      ? `<p>Recovered <strong>${list.length}</strong> item${list.length > 1 ? 's' : ''}. Equip now or scrap for caps.</p>
+         <div class="loot-grid">${list.map((item) => this.lootCard(item)).join('')}</div>`
+      : '<p>The run came back empty. The wastes keep what they take.</p>';
+    this.openModal({
+      eyebrow: 'SALVAGE RUN',
+      title,
+      kind: 'loot',
+      wide: true,
+      body,
+      actions: [{ label: 'CLOSE', kind: '' }],
+    });
+  }
+
+  refreshOpenGear() {
+    if (this.modalKind === 'gear') {
+      this.openGear();
+    } else if (this.modalKind === 'loot') {
+      const ids = this.lastLoot?.ids || [];
+      const items = ids.map((id) => this.s.inventory.find((item) => item.id === id)).filter(Boolean);
+      this.openLootResults(items, this.lastLoot?.title || 'Recovered gear');
+    }
+  }
+
   toast(text, type = '') {
     const wrap = $('toasts');
     const el = document.createElement('div');
@@ -689,12 +969,14 @@ export class UI {
     btn.title = this.s.sound ? 'Mute sound' : 'Enable sound';
   }
 
-  openModal({ eyebrow = 'SYSTEM', title, body, actions = [] }) {
+  openModal({ eyebrow = 'SYSTEM', title, body, actions = [], wide = false, kind = null }) {
     const modal = $('modal');
+    this.modalKind = kind;
     $('modalEyebrow').textContent = eyebrow;
     $('modalTitle').textContent = title;
     const bodyEl = $('modalBody');
     bodyEl.innerHTML = body;
+    bodyEl.scrollTop = 0;
     const actionsEl = $('modalActions');
     actionsEl.innerHTML = '';
     for (const action of actions) {
@@ -709,15 +991,27 @@ export class UI {
       actionsEl.append(btn);
     }
     modal.hidden = false;
+    modal.querySelector('.modal-card').classList.toggle('wide', !!wide);
     modal.querySelector('.modal-card').focus?.();
   }
 
   closeModal() {
     const modal = $('modal');
     modal.hidden = true;
+    this.modalKind = null;
   }
 }
 
 function canAffordOre(state, oreCost) {
   return Object.entries(oreCost).every(([k, v]) => (state.ores[k] || 0) >= v);
+}
+
+/* Colour-codes the action box in the Forge: EQUIP / IN USE / UNLOCK / UPGRADE. */
+function setCta(el, label, state) {
+  if (!el) return;
+  el.textContent = label;
+  el.classList.remove('cta-equip', 'cta-inuse', 'cta-unlock', 'cta-upgrade');
+  if (state) el.classList.add(`cta-${state}`);
+  const card = el.closest('.card');
+  if (card) card.dataset.ctaState = state || '';
 }

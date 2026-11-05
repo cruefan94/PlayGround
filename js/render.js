@@ -1,5 +1,5 @@
 /* Canvas renderers: animated miner, ore vein, wasteland combat. */
-import { LAYERS, ZONES, ORES, layerMaxHp, pickPower } from './data.js';
+import { LAYERS, ZONES, ORES, layerMaxHp, pickPower, miningTool, combatWeapon, equippedItem, rarityOf } from './data.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -807,6 +807,26 @@ export class MineRenderer extends BaseRenderer {
     ctx.fillStyle = '#0b0c08';
     ctx.beginPath(); ctx.ellipse(-17, -2, 7, 3, 0, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.ellipse(14, -2, 7, 3, 0, 0, TAU); ctx.fill();
+    // knee wraps and a field bandage
+    ctx.strokeStyle = 'rgba(130,110,80,0.55)';
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-15 + i * 1.6, -16 - i * 3);
+      ctx.lineTo(-9 + i * 1.6, -18 - i * 3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(8 + i * 1.4, -14 - i * 3);
+      ctx.lineTo(14 + i * 1.4, -16 - i * 3);
+      ctx.stroke();
+    }
+    if ((this.game.state.stats?.deaths || 0) > 0) {
+      ctx.fillStyle = 'rgba(190,180,150,0.35)';
+      ctx.fillRect(8, -21, 7, 3);
+      ctx.strokeStyle = 'rgba(120,50,40,0.45)';
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(8, -21, 7, 3);
+    }
 
     // backpack
     ctx.fillStyle = '#15160f';
@@ -844,11 +864,38 @@ export class MineRenderer extends BaseRenderer {
     ctx.fillRect(-10, -42, 21, 3);
     ctx.fillStyle = '#8a6a35';
     ctx.fillRect(1, -43, 4, 5);
+    // belt pouches, canteen and a battered knife
+    ctx.fillStyle = '#2b2518';
+    ctx.fillRect(-10, -42, 5, 7);
+    ctx.fillRect(-4, -41, 4, 5);
+    ctx.strokeStyle = 'rgba(255,210,150,0.14)';
+    ctx.lineWidth = 0.7;
+    ctx.strokeRect(-10, -42, 5, 7);
+    ctx.fillStyle = '#43483b';
+    ctx.fillRect(9, -42, 4, 7);
+    ctx.fillStyle = '#7f6a3e';
+    ctx.fillRect(10, -43, 2, 1);
+    ctx.strokeStyle = '#5e4a2c';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-13, -40);
+    ctx.lineTo(-17, -35);
+    ctx.stroke();
 
     // shoulder pad
     ctx.fillStyle = '#2b2318';
     ctx.beginPath(); ctx.arc(-2, -58, 8, Math.PI, TAU); ctx.fill();
     ctx.strokeStyle = 'rgba(255,177,92,0.25)'; ctx.stroke();
+    // patchwork and stitching
+    ctx.fillStyle = 'rgba(80,66,45,0.7)';
+    ctx.fillRect(1, -53, 6, 4);
+    ctx.strokeStyle = 'rgba(255,210,150,0.16)';
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(1, -53, 6, 4);
+    ctx.beginPath();
+    ctx.moveTo(-10, -36); ctx.lineTo(-7, -33);
+    ctx.moveTo(6, -45); ctx.lineTo(10, -43);
+    ctx.stroke();
 
     // head + hood
     ctx.fillStyle = '#14150e';
@@ -857,12 +904,52 @@ export class MineRenderer extends BaseRenderer {
     ctx.strokeStyle = 'rgba(255,190,120,0.3)';
     ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(2, -69, 9.5, -0.9, 1.8); ctx.stroke();
+    // exposed jaw and grime
+    ctx.fillStyle = '#6e5238';
+    ctx.beginPath(); ctx.ellipse(6.5, -64.5, 4.4, 3.4, -0.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(28,20,14,0.55)';
+    ctx.beginPath(); ctx.ellipse(7.4, -63.2, 2.7, 1.5, -0.1, 0, TAU); ctx.fill();
+    // stubble
+    ctx.fillStyle = 'rgba(20,16,12,0.7)';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(4.6 + i * 1.1, -64.6 + (i % 2) * 0.8, 0.5, 0.5);
+    }
+    // old scar if the survivor has been knocked out before
+    if ((this.game.state.stats?.deaths || 0) > 0) {
+      ctx.strokeStyle = 'rgba(120,55,40,0.75)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(4.5, -69.5);
+      ctx.lineTo(6.4, -66.8);
+      ctx.stroke();
+    }
     // face plate
     ctx.fillStyle = '#3b3d30';
     ctx.beginPath(); ctx.ellipse(7, -68, 5, 4, -0.2, 0, TAU); ctx.fill();
     // breathing filter
     ctx.fillStyle = '#22241b';
     ctx.beginPath(); ctx.arc(11, -65.5, 2.6, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#4c4d3e';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+    // corrugated breathing hose into the chest canister
+    ctx.strokeStyle = 'rgba(80,86,70,0.75)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(11.5, -63.5);
+    ctx.quadraticCurveTo(14, -56, 8, -50);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,190,120,0.18)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    // neck scarf, tattered
+    ctx.fillStyle = '#4a3a2b';
+    ctx.beginPath();
+    ctx.moveTo(-6, -61); ctx.lineTo(7, -62); ctx.lineTo(8, -58); ctx.lineTo(0, -57); ctx.lineTo(-7, -58);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-6, -58); ctx.lineTo(-11, -51); ctx.lineTo(-7, -50); ctx.lineTo(-3, -57);
+    ctx.closePath(); ctx.fill();
     // goggles
     const pulse = 0.75 + Math.sin(t * 3.2) * 0.25;
     ctx.fillStyle = goggleColor;
@@ -871,6 +958,10 @@ export class MineRenderer extends BaseRenderer {
     ctx.beginPath(); ctx.arc(5, -70, 1.6, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(9.5, -70.4, 1.4, 0, TAU); ctx.fill();
     ctx.shadowBlur = 0;
+    // goggle strap
+    ctx.strokeStyle = '#1e2019';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-4, -70); ctx.lineTo(12, -71); ctx.stroke();
     // helmet lamp
     ctx.fillStyle = '#ffdca6';
     ctx.beginPath(); ctx.arc(0, -76.5, 1.2, 0, TAU); ctx.fill();
@@ -883,52 +974,38 @@ export class MineRenderer extends BaseRenderer {
       ctx.shadowBlur = 0;
     }
 
-    // arm + pickaxe
+    // arm + tool
+    const tool = miningTool(this.game.state);
+    const lootTool = equippedItem(this.game.state, 'tool');
+    const toolTrim = lootTool ? rarityOf(lootTool).color : null;
     const shoulderX = 7;
     const shoulderY = -56;
     const handX = shoulderX + Math.cos(swingAngle) * 19;
     const handY = shoulderY + Math.sin(swingAngle) * 19;
+    // forearm wrap
     ctx.strokeStyle = '#191a12';
     ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(shoulderX, shoulderY);
     ctx.lineTo(handX, handY);
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(196,239,82,0.16)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(shoulderX + 4, shoulderY + 2);
+    ctx.lineTo(handX - 2, handY - 1);
+    ctx.stroke();
+    // dirty glove
     ctx.fillStyle = '#2c2a20';
     ctx.beginPath(); ctx.arc(handX, handY, 3, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(120,80,45,0.45)';
+    ctx.beginPath(); ctx.arc(handX - 0.5, handY - 0.5, 1.4, 0, TAU); ctx.fill();
 
-    // pickaxe
-    const pickLen = 48;
+    const pickLen = tool.visual === 'maul' ? 42 : tool.visual === 'drill' ? 37 : tool.visual === 'cutter' ? 33 : tool.visual === 'ripper' ? 47 : 48;
     const tipX = handX + Math.cos(swingAngle) * pickLen;
     const tipY = handY + Math.sin(swingAngle) * pickLen;
-    ctx.strokeStyle = '#4e3520';
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(handX, handY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,200,150,0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(handX, handY - 1);
-    ctx.lineTo(tipX, tipY - 1);
-    ctx.stroke();
-    // axe head
-    ctx.save();
-    ctx.translate(tipX, tipY);
-    ctx.rotate(swingAngle + Math.PI / 2);
-    ctx.fillStyle = '#7c7d6e';
-    ctx.beginPath();
-    ctx.moveTo(-8, 0); ctx.lineTo(0, -5); ctx.lineTo(8, 0); ctx.lineTo(5, 4); ctx.lineTo(-5, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.32)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,177,92,0.35)';
-    ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(0, -4); ctx.lineTo(3, -2); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    this.drawMiningTool(ctx, tool.visual, handX, handY, swingAngle, pickLen, toolTrim);
 
     // impact spark ring
     if (p > 0.35 && p < 0.55) {
@@ -942,6 +1019,134 @@ export class MineRenderer extends BaseRenderer {
       ctx.globalAlpha = 1;
     }
 
+    ctx.restore();
+  }
+
+  drawMiningTool(ctx, visual, x, y, angle, len, trim) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    const grip = visual === 'ripper' ? '#3a3150' : visual === 'cutter' ? '#2b2d26' : '#4e3520';
+    ctx.strokeStyle = grip;
+    ctx.lineWidth = visual === 'maul' ? 5 : 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(len * 0.82, 0);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,200,150,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -1);
+    ctx.lineTo(len * 0.8, -1);
+    ctx.stroke();
+    // grip wraps
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(4 + i * 4, -2.6);
+      ctx.lineTo(5 + i * 4, 2.6);
+      ctx.stroke();
+    }
+    if (trim) {
+      ctx.strokeStyle = trim;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(len * 0.56, -3.2);
+      ctx.lineTo(len * 0.56, 3.2);
+      ctx.stroke();
+      ctx.fillStyle = trim;
+      ctx.shadowColor = trim;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(len * 0.56, 0, 1.2, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.translate(len * 0.82, 0);
+    if (visual === 'maul') {
+      ctx.fillStyle = '#5b5e50';
+      ctx.fillRect(-6, -9, 15, 18);
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-6, -9, 15, 18);
+      ctx.fillStyle = '#2f332b';
+      ctx.fillRect(-9, -6, 5, 12);
+      ctx.fillStyle = 'rgba(255,177,92,0.45)';
+      ctx.fillRect(3, -7, 2, 14);
+      ctx.strokeStyle = '#8d8f7d';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(-7, -9); ctx.lineTo(-7, 9); ctx.stroke();
+    } else if (visual === 'drill') {
+      ctx.fillStyle = '#3b4037';
+      ctx.fillRect(-12, -6, 13, 12);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.strokeRect(-12, -6, 13, 12);
+      ctx.fillStyle = '#22251f';
+      ctx.beginPath(); ctx.arc(-8, 0, 3.4, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#c7b06a';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(1 + i * 3, -4 + (i % 2) * 1.5);
+        ctx.lineTo(4 + i * 3, 4 - (i % 2) * 1.5);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,177,92,0.8)';
+      ctx.shadowColor = '#ffb15c';
+      ctx.shadowBlur = 7;
+      ctx.beginPath(); ctx.arc(14, 0, 1.8, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    } else if (visual === 'cutter') {
+      ctx.fillStyle = '#31362d';
+      ctx.fillRect(-8, -4.5, 11, 9);
+      ctx.strokeStyle = 'rgba(143,242,240,0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-8, -4.5, 11, 9);
+      ctx.strokeStyle = '#8ff2f0';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = '#8ff2f0';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(3, 0);
+      ctx.lineTo(13, 0);
+      ctx.stroke();
+      ctx.fillStyle = '#d8ffff';
+      ctx.beginPath(); ctx.arc(13, 0, 1.5, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    } else if (visual === 'ripper') {
+      ctx.fillStyle = '#2c2438';
+      ctx.fillRect(-6, -3, 8, 6);
+      const g = ctx.createLinearGradient(0, -8, 20, 8);
+      g.addColorStop(0, '#b98aff');
+      g.addColorStop(0.5, '#e7d7ff');
+      g.addColorStop(1, '#6a4a9e');
+      ctx.fillStyle = g;
+      ctx.shadowColor = '#b98aff';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(1, -5); ctx.lineTo(18, 0); ctx.lineTo(1, 5); ctx.lineTo(5, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#7c7d6e';
+      ctx.beginPath();
+      ctx.moveTo(-7, 0); ctx.lineTo(0, -7); ctx.lineTo(10, -1); ctx.lineTo(9, 3); ctx.lineTo(0, 1); ctx.lineTo(-5, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,177,92,0.4)';
+      ctx.beginPath(); ctx.moveTo(-2, -2); ctx.lineTo(0, -5); ctx.lineTo(3, -1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#5a4a32';
+      ctx.fillRect(-9, -2.2, 3, 4.4);
+    }
     ctx.restore();
   }
 
@@ -1431,6 +1636,13 @@ export class CombatRenderer extends BaseRenderer {
     const coatColor = outfitCoat(duster);
     const goggleColor = outfitGoggles(rebreather);
     const level = this.game.state.level || 1;
+    const gearArmor = equippedItem(this.game.state, 'armor');
+    const gearHelm = equippedItem(this.game.state, 'helm');
+    const gearCharm = equippedItem(this.game.state, 'charm');
+    const armorTrim = gearArmor ? rarityOf(gearArmor).color : null;
+    const helmTrim = gearHelm ? rarityOf(gearHelm).color : null;
+    const charmTrim = gearCharm ? rarityOf(gearCharm).color : (charm > 0 ? '#b98aff' : null);
+    const deaths = this.game.state.stats?.deaths || 0;
 
     ctx.save();
     ctx.translate(x, y);
@@ -1522,6 +1734,54 @@ export class CombatRenderer extends BaseRenderer {
     ctx.fillRect(-9, -44, 21, 3);
     ctx.fillStyle = '#8a6a35';
     ctx.fillRect(2, -45, 4, 5);
+    // pouches, canteen, field knife
+    ctx.fillStyle = '#282216';
+    ctx.fillRect(-9, -44, 5, 8);
+    ctx.fillRect(-3, -43, 4, 6);
+    ctx.strokeStyle = 'rgba(255,210,150,0.14)';
+    ctx.lineWidth = 0.7;
+    ctx.strokeRect(-9, -44, 5, 8);
+    ctx.fillStyle = '#42473a';
+    ctx.fillRect(8, -44, 4, 8);
+    ctx.fillStyle = '#7f6a3e';
+    ctx.fillRect(9, -45, 2, 1);
+    ctx.strokeStyle = '#5c482c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-12, -42);
+    ctx.lineTo(-16, -37);
+    ctx.stroke();
+    // coat patches, stitching and rust stains
+    ctx.fillStyle = 'rgba(90,74,50,0.7)';
+    ctx.fillRect(2, -55, 6, 4);
+    ctx.strokeStyle = 'rgba(255,210,150,0.16)';
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(2, -55, 6, 4);
+    ctx.beginPath();
+    ctx.moveTo(-10, -38); ctx.lineTo(-7, -35);
+    ctx.moveTo(5, -47); ctx.lineTo(9, -45);
+    ctx.moveTo(-5, -31); ctx.lineTo(-2, -28);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(70,35,20,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(-4, -40, 3, 1.6, 0.3, 0, TAU);
+    ctx.fill();
+    // fitted armor trim
+    if (armorTrim) {
+      ctx.strokeStyle = armorTrim;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-7, -56);
+      ctx.lineTo(-11, -40);
+      ctx.stroke();
+      ctx.shadowColor = armorTrim;
+      ctx.shadowBlur = 5;
+      ctx.beginPath();
+      ctx.arc(-7, -56, 1.2, 0, TAU);
+      ctx.fillStyle = armorTrim;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
     // shoulder guard
     ctx.fillStyle = '#2f291c';
@@ -1534,6 +1794,13 @@ export class CombatRenderer extends BaseRenderer {
     // spikes
     ctx.fillStyle = '#514737';
     ctx.beginPath(); ctx.moveTo(-2, -66); ctx.lineTo(1, -71); ctx.lineTo(3, -65); ctx.closePath(); ctx.fill();
+    if (armorTrim) {
+      ctx.strokeStyle = armorTrim;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(2, -59, 8.5, Math.PI, TAU);
+      ctx.stroke();
+    }
 
     // head / gas mask
     ctx.fillStyle = '#14150f';
@@ -1542,6 +1809,31 @@ export class CombatRenderer extends BaseRenderer {
     ctx.strokeStyle = 'rgba(255,177,92,0.3)';
     ctx.lineWidth = 1.1;
     ctx.beginPath(); ctx.arc(3, -69, 9, -1.1, 1.9); ctx.stroke();
+    // exposed cheek, grime and stubble
+    ctx.fillStyle = '#6f5338';
+    ctx.beginPath(); ctx.ellipse(7, -64.5, 4.2, 3.2, -0.15, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(28,20,14,0.55)';
+    ctx.beginPath(); ctx.ellipse(7.8, -63.2, 2.6, 1.4, -0.1, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(20,16,12,0.7)';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(5.1 + i * 1.1, -64.6 + (i % 2) * 0.8, 0.5, 0.5);
+    }
+    // knockout scars accumulate on the survivor
+    if (deaths > 0) {
+      ctx.strokeStyle = 'rgba(120,55,40,0.75)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(4.8, -70.2);
+      ctx.lineTo(6.8, -67.4);
+      ctx.stroke();
+    }
+    if (deaths > 2) {
+      ctx.strokeStyle = 'rgba(120,55,40,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(8.6, -66.4);
+      ctx.lineTo(10.2, -64.8);
+      ctx.stroke();
+    }
     // mask
     ctx.fillStyle = '#3a3d31';
     ctx.beginPath();
@@ -1562,6 +1854,24 @@ export class CombatRenderer extends BaseRenderer {
       ctx.arc(11.5, -65.5, 3.6, -0.4, 2.4);
       ctx.stroke();
     }
+    // corrugated breathing hose
+    ctx.strokeStyle = 'rgba(80,86,70,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(11.8, -63.2);
+    ctx.quadraticCurveTo(15, -56, 8, -49);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,190,120,0.2)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    // neck scarf, torn and dust-caked
+    ctx.fillStyle = '#4a3a2b';
+    ctx.beginPath();
+    ctx.moveTo(-6, -61); ctx.lineTo(8, -62); ctx.lineTo(9, -58); ctx.lineTo(0, -57); ctx.lineTo(-7, -58);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-5, -58); ctx.lineTo(-11, -50); ctx.lineTo(-7, -49); ctx.lineTo(-2, -57);
+    ctx.closePath(); ctx.fill();
     // goggles
     ctx.fillStyle = goggleColor;
     ctx.shadowColor = goggleColor;
@@ -1569,18 +1879,36 @@ export class CombatRenderer extends BaseRenderer {
     ctx.beginPath(); ctx.arc(5.5, -70, 1.5, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(10, -70.4, 1.3, 0, TAU); ctx.fill();
     ctx.shadowBlur = 0;
+    // goggle strap
+    ctx.strokeStyle = '#1e2019';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-3, -70); ctx.lineTo(12, -71); ctx.stroke();
     // hood tip / lamp
     ctx.fillStyle = '#ffb15c';
     ctx.beginPath(); ctx.arc(0, -76, 1.2, 0, TAU); ctx.fill();
+    if (helmTrim) {
+      ctx.strokeStyle = helmTrim;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(3, -69, 9.2, -1.05, 1.85);
+      ctx.stroke();
+      ctx.shadowColor = helmTrim;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(0, -76, 1.4, 0, TAU);
+      ctx.fillStyle = helmTrim;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
-    // warden charm pendant
-    if (charm > 0) {
-      ctx.fillStyle = 'rgba(185,138,255,0.9)';
-      ctx.shadowColor = '#b98aff';
+    // charm pendant — outfit charm or a looted relic
+    if (charmTrim) {
+      ctx.fillStyle = charmTrim;
+      ctx.shadowColor = charmTrim;
       ctx.shadowBlur = 7;
       ctx.beginPath(); ctx.arc(-4, -48, 1.9, 0, TAU); ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(185,138,255,0.35)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.moveTo(-4, -54);
@@ -1589,53 +1917,95 @@ export class CombatRenderer extends BaseRenderer {
     }
 
     // weapon arm (right)
-    const armAngle = atk < 1
-      ? lerp(-1.9, 0.35, easeInOut(clamp(atk / 0.65, 0, 1)))
-      : -0.5 + Math.sin(t * 1.8) * 0.03;
+    const weapon = combatWeapon(this.game.state);
+    const lootWeapon = equippedItem(this.game.state, 'weapon');
+    const weaponTrim = lootWeapon ? rarityOf(lootWeapon).color : null;
+    const gunVisuals = new Set(['pistol', 'smg', 'shotgun', 'rifle', 'mg', 'railgun']);
+    const isGun = gunVisuals.has(weapon.visual);
+    const armAngle = isGun
+      ? -0.12 + (atk < 1 ? Math.sin(Math.PI * atk) * -0.24 : Math.sin(t * 1.8) * 0.01)
+      : (atk < 1
+        ? lerp(-1.9, 0.35, easeInOut(clamp(atk / 0.65, 0, 1)))
+        : -0.5 + Math.sin(t * 1.8) * 0.03);
     const shX = 8, shY = -57;
-    const handX = shX + Math.cos(armAngle) * 18;
-    const handY = shY + Math.sin(armAngle) * 18;
+    const armLen = isGun ? 17 : 18;
+    const handX = shX + Math.cos(armAngle) * armLen;
+    const handY = shY + Math.sin(armAngle) * armLen;
+    // sleeve and forearm wrap
     ctx.strokeStyle = hurt > 0.3 ? '#5a2419' : '#191a13';
     ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(shX, shY);
     ctx.lineTo(handX, handY);
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(196,239,82,0.14)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(shX + 3, shY + 1);
+    ctx.lineTo(handX - 2, handY - 1);
+    ctx.stroke();
+    // glove
     ctx.fillStyle = '#2e2a1e';
     ctx.beginPath(); ctx.arc(handX, handY, 3, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(120,80,45,0.45)';
+    ctx.beginPath(); ctx.arc(handX - 0.5, handY - 0.5, 1.3, 0, TAU); ctx.fill();
 
-    // pipe axe
-    const len = 36;
-    const tipX = handX + Math.cos(armAngle) * len;
-    const tipY = handY + Math.sin(armAngle) * len;
-    ctx.strokeStyle = '#4a3a26';
-    ctx.lineWidth = 3.4;
-    ctx.beginPath();
-    ctx.moveTo(handX, handY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    ctx.save();
-    ctx.translate(tipX, tipY);
-    ctx.rotate(armAngle + Math.PI / 2);
-    ctx.fillStyle = '#8b8b78';
-    ctx.beginPath();
-    ctx.moveTo(-6, 0); ctx.lineTo(-2, -7); ctx.lineTo(7, -6); ctx.lineTo(8, 3); ctx.lineTo(-3, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 0.9;
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,90,60,0.55)';
-    ctx.beginPath(); ctx.arc(-1, -3, 1.5, 0, TAU); ctx.fill();
-    ctx.restore();
+    const weaponLen = weapon.visual === 'axe' ? 36
+      : weapon.visual === 'bat' ? 38
+        : weapon.visual === 'cleaver' ? 34
+          : weapon.visual === 'lance' ? 48
+            : weapon.visual === 'reaver' ? 46
+              : weapon.visual === 'pistol' ? 22
+                : weapon.visual === 'smg' ? 28
+                  : weapon.visual === 'shotgun' ? 33
+                    : weapon.visual === 'mg' ? 39
+                      : weapon.visual === 'railgun' ? 48
+                        : 44;
+    const tipX = handX + Math.cos(armAngle) * weaponLen;
+    const tipY = handY + Math.sin(armAngle) * weaponLen;
+    this.drawCombatWeapon(ctx, weapon.visual, handX, handY, armAngle, weaponLen, weaponTrim, atk);
+
+    // muzzle flash for firearms
+    if (isGun && atk < 0.3) {
+      const k = 1 - atk / 0.3;
+      ctx.save();
+      ctx.translate(tipX, tipY);
+      ctx.rotate(armAngle);
+      ctx.globalAlpha = k;
+      const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, 12);
+      fg.addColorStop(0, 'rgba(255,245,200,0.95)');
+      fg.addColorStop(0.4, 'rgba(255,177,92,0.7)');
+      fg.addColorStop(1, 'rgba(255,120,40,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(0, 0, 12, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,230,180,0.9)';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < 3; i++) {
+        const a = -0.6 + i * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * (8 + k * 7), Math.sin(a) * (8 + k * 7));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     // off hand
     const offX = -10 + Math.sin(t * 2) * 0.4;
     ctx.fillStyle = '#1a1b13';
     ctx.beginPath(); ctx.arc(offX, -48, 3, 0, TAU); ctx.fill();
+    if (deaths > 0) {
+      ctx.strokeStyle = 'rgba(190,180,150,0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(offX - 2, -50);
+      ctx.lineTo(offX + 2, -46);
+      ctx.stroke();
+    }
 
-    // attack swipe arc
-    if (atk < 0.7) {
+    // melee swipe arc
+    if (!isGun && atk < 0.7) {
       const k = easeOut(atk / 0.7);
       ctx.strokeStyle = `rgba(255,190,120,${0.5 * (1 - k)})`;
       ctx.lineWidth = 2;
@@ -1644,6 +2014,239 @@ export class CombatRenderer extends BaseRenderer {
       ctx.stroke();
     }
 
+    ctx.restore();
+  }
+
+  drawCombatWeapon(ctx, visual, x, y, angle, len, trim, atk) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    const isGun = ['pistol', 'smg', 'shotgun', 'rifle', 'mg', 'railgun'].includes(visual);
+
+    if (isGun) {
+      // stock, receiver, grip, barrel — silhouettes differ per gun class
+      ctx.fillStyle = '#3b3a31';
+      const bodyEnd = visual === 'pistol' ? len * 0.52 : len * 0.58;
+      const bodyH = visual === 'mg' ? 8 : visual === 'shotgun' ? 6 : 5;
+      // stock
+      if (visual !== 'pistol') {
+        ctx.fillStyle = '#2a271e';
+        ctx.beginPath();
+        ctx.moveTo(-9, -2.5);
+        ctx.lineTo(0, -bodyH / 2);
+        ctx.lineTo(0, bodyH / 2);
+        ctx.lineTo(-9, 3.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // receiver
+      ctx.fillStyle = '#3b3a31';
+      ctx.fillRect(0, -bodyH / 2, bodyEnd, bodyH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(0, -bodyH / 2, bodyEnd, bodyH);
+      // barrel
+      ctx.fillStyle = visual === 'railgun' ? '#4a4058' : '#25261f';
+      const barrelH = visual === 'mg' ? 3.6 : visual === 'shotgun' ? 3 : 2.2;
+      ctx.fillRect(bodyEnd, -barrelH / 2, len - bodyEnd, barrelH);
+      // grip
+      ctx.fillStyle = '#29261d';
+      ctx.fillRect(visual === 'pistol' ? 3 : 5, bodyH / 2, 4, 8);
+      // trigger guard
+      ctx.strokeStyle = '#1c1d17';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(visual === 'pistol' ? 6 : 8, bodyH / 2 + 4, 3, 0, Math.PI);
+      ctx.stroke();
+      // magazine / belt box
+      if (visual === 'smg' || visual === 'rifle') {
+        ctx.fillStyle = '#2b2d24';
+        ctx.fillRect(bodyEnd * 0.45, bodyH / 2, 5, visual === 'smg' ? 12 : 8);
+      }
+      if (visual === 'mg') {
+        ctx.fillStyle = '#3a3d31';
+        ctx.fillRect(bodyEnd * 0.32, bodyH / 2 + 1, 11, 8);
+        ctx.strokeStyle = '#c7a85a';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.moveTo(bodyEnd * 0.35 + i * 2.2, bodyH / 2 + 2);
+          ctx.lineTo(bodyEnd * 0.35 + i * 2.2, bodyH / 2 + 8);
+          ctx.stroke();
+        }
+        // bipod
+        ctx.strokeStyle = '#2a2c24';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(bodyEnd + 2, 1);
+        ctx.lineTo(bodyEnd + 6, 9);
+        ctx.moveTo(bodyEnd + 2, -1);
+        ctx.lineTo(bodyEnd + 6, -9);
+        ctx.stroke();
+      }
+      // sights / scope
+      if (visual === 'rifle' || visual === 'railgun') {
+        ctx.fillStyle = '#20221b';
+        ctx.fillRect(bodyEnd * 0.32, -bodyH / 2 - 4, visual === 'railgun' ? 14 : 10, 3);
+        ctx.strokeStyle = visual === 'railgun' ? '#b98aff' : '#7f8578';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(bodyEnd * 0.32, -bodyH / 2 - 4, visual === 'railgun' ? 14 : 10, 3);
+      }
+      if (visual === 'shotgun') {
+        // pump under the barrel
+        ctx.fillStyle = '#4a4030';
+        ctx.fillRect(bodyEnd - 2, 3, 8, 3);
+      }
+      if (visual === 'railgun') {
+        // twin rails with charged energy
+        ctx.strokeStyle = '#8e78b8';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(bodyEnd, -2.4);
+        ctx.lineTo(len, -2.4);
+        ctx.moveTo(bodyEnd, 2.4);
+        ctx.lineTo(len, 2.4);
+        ctx.stroke();
+        const pulse = 0.55 + Math.sin((atk < 1 ? atk : 1) * 8) * 0.2;
+        ctx.strokeStyle = `rgba(185,138,255,${pulse})`;
+        ctx.shadowColor = '#b98aff';
+        ctx.shadowBlur = 7;
+        ctx.beginPath();
+        ctx.moveTo(bodyEnd, 0);
+        ctx.lineTo(len, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        for (let i = 0; i < 3; i++) {
+          ctx.strokeStyle = 'rgba(185,138,255,0.5)';
+          ctx.beginPath();
+          ctx.arc(bodyEnd + 4 + i * 4, 0, 2.2, 0, TAU);
+          ctx.stroke();
+        }
+      }
+      // rarity trim on the receiver
+      if (trim) {
+        ctx.strokeStyle = trim;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(1, -bodyH / 2);
+        ctx.lineTo(bodyEnd - 1, -bodyH / 2);
+        ctx.stroke();
+        ctx.fillStyle = trim;
+        ctx.shadowColor = trim;
+        ctx.shadowBlur = 5;
+        ctx.beginPath(); ctx.arc(bodyEnd - 2, 0, 1.1, 0, TAU); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    } else if (visual === 'bat') {
+      ctx.strokeStyle = '#4a3a26';
+      ctx.lineWidth = 3.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.82, 0); ctx.stroke();
+      ctx.fillStyle = '#6b5a3e';
+      ctx.beginPath();
+      ctx.moveTo(len * 0.72, -3.4);
+      ctx.lineTo(len, -4.2);
+      ctx.lineTo(len + 2, 0);
+      ctx.lineTo(len, 4.2);
+      ctx.lineTo(len * 0.72, 3.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#8d8f7d';
+      ctx.lineWidth = 1.1;
+      for (let i = 0; i < 4; i++) {
+        const bx = len * 0.5 + i * 5;
+        ctx.beginPath();
+        ctx.moveTo(bx, -3.4);
+        ctx.lineTo(bx + 3, 3.4);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#b9b49c';
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(len * 0.6 + i * 6, -4);
+        ctx.lineTo(len * 0.6 + i * 6 + 2, -7);
+        ctx.lineTo(len * 0.6 + i * 6 + 3, -4);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (visual === 'cleaver') {
+      ctx.strokeStyle = '#4a3a26';
+      ctx.lineWidth = 3.4;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.75, 0); ctx.stroke();
+      ctx.fillStyle = '#8b8b78';
+      ctx.beginPath();
+      ctx.moveTo(len * 0.68, -6);
+      ctx.lineTo(len + 4, -8);
+      ctx.lineTo(len + 4, 8);
+      ctx.lineTo(len * 0.68, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,90,60,0.5)';
+      ctx.beginPath(); ctx.arc(len * 0.8, -2, 1.4, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2b2318';
+      ctx.fillRect(len * 0.66, -3, 4, 6);
+    } else if (visual === 'lance') {
+      ctx.strokeStyle = '#3c3a32';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
+      ctx.strokeStyle = 'rgba(143,242,240,0.4)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(len * 0.9, -1); ctx.stroke();
+      ctx.fillStyle = '#8ff2f0';
+      ctx.shadowColor = '#8ff2f0';
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.moveTo(len * 0.86, -3); ctx.lineTo(len + 5, 0); ctx.lineTo(len * 0.86, 3); ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#4c4d3e';
+      ctx.fillRect(len * 0.58, -4, 3, 8);
+    } else if (visual === 'reaver') {
+      ctx.strokeStyle = '#3a3150';
+      ctx.lineWidth = 2.8;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.8, 0); ctx.stroke();
+      const g = ctx.createLinearGradient(len * 0.6, -14, len + 8, 10);
+      g.addColorStop(0, '#b98aff');
+      g.addColorStop(0.5, '#f0e4ff');
+      g.addColorStop(1, '#5b3f8c');
+      ctx.fillStyle = g;
+      ctx.shadowColor = '#b98aff';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(len * 0.64, -2);
+      ctx.quadraticCurveTo(len * 0.92, -20, len + 8, -6);
+      ctx.quadraticCurveTo(len * 0.94, -3, len * 0.66, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    } else {
+      // pipe axe
+      ctx.strokeStyle = '#4a3a26';
+      ctx.lineWidth = 3.4;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.78, 0); ctx.stroke();
+      ctx.fillStyle = '#8b8b78';
+      ctx.beginPath();
+      ctx.moveTo(len * 0.7, -2); ctx.lineTo(len * 0.76, -9); ctx.lineTo(len + 3, -7); ctx.lineTo(len + 4, 4); ctx.lineTo(len * 0.7, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,90,60,0.55)';
+      ctx.beginPath(); ctx.arc(len * 0.78, -3, 1.5, 0, TAU); ctx.fill();
+    }
+    if (trim) {
+      ctx.fillStyle = trim;
+      ctx.shadowColor = trim;
+      ctx.shadowBlur = 5;
+      ctx.beginPath(); ctx.arc(4, 0, 1.1, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
     ctx.restore();
   }
 

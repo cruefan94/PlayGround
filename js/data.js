@@ -40,6 +40,367 @@ export const OUTFITS = [
 
 export const OUTFIT_MAP = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));
 
+/* Salvage tools and combat weapons. Tools trade strike speed, vein damage,
+   yield and crit against one another. Weapons trade damage, swing speed and
+   crit. The Forge's tuning tracks raise every item in the slot. */
+export const MINING_TOOLS = [
+  {
+    id: 'pick', name: 'Scrap Pickaxe', icon: '⛏', tier: 'SALVAGE', visual: 'pick',
+    blurb: 'Rebar and a sharpened truck spring. Nothing fancy, never quits.',
+    powerMult: 1, yieldMult: 1, cooldown: 45, critBonus: 0,
+    unlock: null,
+    stats: 'BALANCED · 45ms SWING',
+  },
+  {
+    id: 'maul', name: 'Breaker Maul', icon: '🔨', tier: 'HEAVY', visual: 'maul',
+    blurb: 'A rail spike welded to a hydraulic ram. Veins do not argue with it.',
+    powerMult: 2.15, yieldMult: 1.3, cooldown: 110, critBonus: 0.02,
+    unlock: { scrap: 140, caps: 45 },
+    stats: 'HEAVY DAMAGE · +30% YIELD',
+  },
+  {
+    id: 'drill', name: 'Rockeater Drill', icon: '⚙', tier: 'POWERED', visual: 'drill',
+    blurb: 'A salvage motor bolted to a mining bit. Loud, thirsty, effective.',
+    powerMult: 0.55, yieldMult: 1.7, cooldown: 28, critBonus: 0,
+    unlock: { scrap: 700, iron: 60, caps: 400 },
+    stats: 'FAST · +70% YIELD',
+  },
+  {
+    id: 'cutter', name: 'Arc Cutter', icon: '⚡', tier: 'ARC', visual: 'cutter',
+    blurb: 'A live plasma nib pulled from a dead welder. Cuts seams like paper.',
+    powerMult: 0.45, yieldMult: 1.05, cooldown: 18, critBonus: 0.18,
+    unlock: { iron: 350, copper: 180, caps: 1800 },
+    stats: 'VERY FAST · +18% CRIT',
+  },
+  {
+    id: 'ripper', name: 'Void Seam Ripper', icon: '✦', tier: 'ANOMALY', visual: 'ripper',
+    blurb: 'A black-vault tooth on a haft of frozen light. It hums when it bites.',
+    powerMult: 2.4, yieldMult: 2.1, cooldown: 65, critBonus: 0.1,
+    unlock: { titanium: 260, uranium: 90, singularity: 12, caps: 12000 },
+    stats: 'EXCAVATION-GRADE · +110% YIELD',
+  },
+];
+
+export const MINING_TOOL_MAP = Object.fromEntries(MINING_TOOLS.map((t) => [t.id, t]));
+
+export const COMBAT_WEAPONS = [
+  {
+    id: 'pipeaxe', name: 'Pipe Axe', icon: '⚔', tier: 'SALVAGE', visual: 'axe',
+    blurb: 'A fire-axe head on a length of lead pipe. The wasteland classic.',
+    damageMult: 1, speedMult: 1, critBonus: 0,
+    unlock: null,
+    stats: 'BALANCED · 0.75s SWING',
+  },
+  {
+    id: 'rivet', name: 'Rivet Bat', icon: '🏏', tier: 'BRAWL', visual: 'bat',
+    blurb: 'Rebar wrapped in razor wire and rivets. Fast hands win fights.',
+    damageMult: 0.85, speedMult: 0.72, critBonus: 0.05,
+    unlock: { scrap: 120, caps: 35 },
+    stats: 'FAST · +5% CRIT',
+  },
+  {
+    id: 'cleaver', name: 'Slag Cleaver', icon: '🪓', tier: 'HEAVY', visual: 'cleaver',
+    blurb: 'A foundry shear with a bone grip. One swing, one problem solved.',
+    damageMult: 1.6, speedMult: 1.3, critBonus: -0.02,
+    unlock: { iron: 180, caps: 650 },
+    stats: 'HEAVY HIT · SLOW SWING',
+  },
+  {
+    id: 'lance', name: 'Rad Lance', icon: '🗡', tier: 'REACH', visual: 'lance',
+    blurb: 'A reactor control rod with a glass tip. Keeps the ugly ones at range.',
+    damageMult: 1.25, speedMult: 0.95, critBonus: 0.04,
+    unlock: { copper: 220, caps: 2200 },
+    stats: 'REACH · +4% CRIT',
+  },
+  {
+    id: 'carbine', name: 'Pulse Carbine', icon: '⌁', tier: 'ENERGY', visual: 'rifle',
+    blurb: 'Scavenged coilgun with a cracked cell. Spits light; asks no questions.',
+    damageMult: 0.9, speedMult: 0.58, critBonus: 0.08,
+    unlock: { titanium: 160, caps: 6000 },
+    stats: 'RAPID FIRE · +8% CRIT',
+  },
+  {
+    id: 'pistol', name: 'Scrap Pistol', icon: '🔫', tier: 'SIDEARM', visual: 'pistol',
+    blurb: 'A pipe barrel, a nail for a firing pin, and one stubborn bullet at a time.',
+    damageMult: 0.72, speedMult: 0.48, critBonus: 0.03,
+    unlock: { scrap: 90, caps: 30 },
+    stats: 'FAST SIDEARM · 0.36s SHOT',
+  },
+  {
+    id: 'smg', name: 'Rivet SMG', icon: '⌇', tier: 'AUTO', visual: 'smg',
+    blurb: 'A stamped receiver that eats rivets and spits them back at raiders.',
+    damageMult: 0.55, speedMult: 0.36, critBonus: 0.02,
+    unlock: { iron: 120, caps: 500 },
+    stats: 'SPRAY · 0.27s BURST',
+  },
+  {
+    id: 'shotgun', name: 'Slag Scattergun', icon: '⌖', tier: 'SPREAD', visual: 'shotgun',
+    blurb: 'Sawn-off slagthrower. Whatever is in front of it becomes part of the wall.',
+    damageMult: 1.4, speedMult: 0.92, critBonus: 0.03,
+    unlock: { scrap: 400, iron: 90, caps: 900 },
+    stats: 'CLOSE RANGE · 0.69s PUMP',
+  },
+  {
+    id: 'rifle', name: 'Warden Rifle', icon: '⌐', tier: 'RIFLE', visual: 'rifle',
+    blurb: 'A warden-issue marksman rifle with a cracked scope and a steady curse.',
+    damageMult: 1.15, speedMult: 0.62, critBonus: 0.07,
+    unlock: { iron: 300, copper: 90, caps: 2400 },
+    stats: 'PRECISE · 0.47s CYCLE',
+  },
+  {
+    id: 'mg', name: 'Breach MG', icon: '≡', tier: 'MACHINE GUN', visual: 'mg',
+    blurb: 'Belt-fed, water-cooled, and held together by prayer and baling wire.',
+    damageMult: 0.8, speedMult: 0.30, critBonus: 0.01,
+    unlock: { iron: 600, copper: 220, caps: 6000 },
+    stats: 'SUSTAINED FIRE · 0.23s BELT',
+  },
+  {
+    id: 'railgun', name: 'Void Railgun', icon: '⌁', tier: 'ANOMALY', visual: 'railgun',
+    blurb: 'A black-vault rail assembly that fires a sliver of folded space.',
+    damageMult: 2.6, speedMult: 1.28, critBonus: 0.15,
+    unlock: { titanium: 300, uranium: 120, singularity: 20, caps: 22000 },
+    stats: 'PIERCE · 0.96s CHARGE',
+  },
+  {
+    id: 'reaver', name: 'Void Reaver', icon: '☄', tier: 'ANOMALY', visual: 'reaver',
+    blurb: 'A vault-forged scythe that cuts the space between heartbeats.',
+    damageMult: 1.9, speedMult: 0.85, critBonus: 0.1,
+    unlock: { uranium: 140, singularity: 18, caps: 18000 },
+    stats: 'DEVASTATING · +10% CRIT',
+  },
+];
+
+export const COMBAT_WEAPON_MAP = Object.fromEntries(COMBAT_WEAPONS.map((w) => [w.id, w]));
+
+export function miningTool(state) {
+  const loot = equippedItem(state, 'tool');
+  return MINING_TOOL_MAP[loot?.classId] || MINING_TOOL_MAP[state?.equippedTool] || MINING_TOOLS[0];
+}
+
+export function combatWeapon(state) {
+  const loot = equippedItem(state, 'weapon');
+  return COMBAT_WEAPON_MAP[loot?.classId] || COMBAT_WEAPON_MAP[state?.equippedWeapon] || COMBAT_WEAPONS[0];
+}
+
+/* ── loot, rarities and character loadout ─────────────────── */
+export const MAX_INVENTORY = 30;
+
+export const RARITIES = [
+  { id: 'common', name: 'Common', color: '#9aa8b2', rank: 0, prefix: 'Scavenged', affixes: 1 },
+  { id: 'uncommon', name: 'Uncommon', color: '#7fdc6a', rank: 1, prefix: 'Riveted', affixes: 2 },
+  { id: 'rare', name: 'Rare', color: '#6fa8ff', rank: 2, prefix: "Warden's", affixes: 2 },
+  { id: 'epic', name: 'Epic', color: '#c58bff', rank: 3, prefix: 'Reactor-Forged', affixes: 3 },
+  { id: 'legendary', name: 'Legendary', color: '#ffb15c', rank: 4, prefix: 'Vault-Touched', affixes: 4 },
+];
+export const RARITY_MAP = Object.fromEntries(RARITIES.map((r) => [r.id, r]));
+
+export const GEAR_SLOTS = [
+  { id: 'weapon', name: 'WEAPON', icon: '⚔' },
+  { id: 'tool', name: 'MINING TOOL', icon: '⛏' },
+  { id: 'armor', name: 'ARMOR', icon: '⛨' },
+  { id: 'helm', name: 'HEAD', icon: '☣' },
+  { id: 'charm', name: 'CHARM', icon: '✦' },
+];
+export const GEAR_SLOT_MAP = Object.fromEntries(GEAR_SLOTS.map((s) => [s.id, s]));
+
+export const GEAR_STAT_LABELS = {
+  damage: 'DMG', crit: 'CRIT', speed: 'SPEED', hp: 'HP', heal: 'HEAL',
+  defense: 'DEF', ore: 'ORE', caps: 'CAPS', xp: 'XP',
+  power: 'POWER', yield: 'YIELD', cooldown: 'SWING',
+};
+const PCT_STATS = new Set(['damage', 'crit', 'speed', 'defense', 'ore', 'caps', 'xp', 'power', 'yield', 'cooldown']);
+
+const LOOT_AFFIXES = {
+  weapon: [
+    { key: 'damage', min: 0.03, max: 0.12 },
+    { key: 'crit', min: 0.005, max: 0.025 },
+    { key: 'speed', min: 0.015, max: 0.06 },
+    { key: 'hp', min: 5, max: 18, flat: true },
+    { key: 'heal', min: 1, max: 4, flat: true },
+  ],
+  tool: [
+    { key: 'power', min: 0.04, max: 0.14 },
+    { key: 'yield', min: 0.04, max: 0.16 },
+    { key: 'cooldown', min: 0.01, max: 0.05 },
+    { key: 'crit', min: 0.005, max: 0.02 },
+    { key: 'ore', min: 0.02, max: 0.08 },
+  ],
+  armor: [
+    { key: 'hp', min: 8, max: 28, flat: true },
+    { key: 'defense', min: 0.004, max: 0.014 },
+    { key: 'heal', min: 1, max: 3, flat: true },
+    { key: 'caps', min: 0.02, max: 0.07 },
+  ],
+  helm: [
+    { key: 'hp', min: 4, max: 14, flat: true },
+    { key: 'crit', min: 0.005, max: 0.022 },
+    { key: 'xp', min: 0.02, max: 0.08 },
+    { key: 'ore', min: 0.02, max: 0.07 },
+  ],
+  charm: [
+    { key: 'ore', min: 0.02, max: 0.08 },
+    { key: 'caps', min: 0.02, max: 0.08 },
+    { key: 'crit', min: 0.004, max: 0.018 },
+    { key: 'speed', min: 0.01, max: 0.04 },
+  ],
+};
+
+const LOOT_BASE_NAMES = {
+  armor: ['Scrap Carapace', 'Riveted Plate', 'Warden Shell', 'Reactor Carapace', 'Void Mantle'],
+  helm: ['Filter Hood', 'Welder Mask', 'Ranger Helm', 'Warden Crown', 'Void Halo'],
+  charm: ['Bone Charm', 'Geiger Rosary', 'Slag Talisman', 'Warden Sigil', 'Void Relic'],
+};
+
+export function rarityOf(item) {
+  return RARITY_MAP[item?.rarity] || RARITIES[0];
+}
+
+export function equippedItem(state, slot) {
+  const id = state?.loadout?.[slot];
+  if (!id || !Array.isArray(state?.inventory)) return null;
+  return state.inventory.find((item) => item.id === id) || null;
+}
+
+export function gearStats(state) {
+  const total = {};
+  for (const slot of GEAR_SLOTS) {
+    const item = equippedItem(state, slot.id);
+    if (!item) continue;
+    for (const [key, value] of Object.entries(item.stats || {})) {
+      total[key] = (total[key] || 0) + (Number(value) || 0);
+    }
+  }
+  return total;
+}
+
+export function gearScore(item) {
+  const stats = item?.stats || {};
+  let score = 0;
+  for (const [key, value] of Object.entries(stats)) {
+    if (PCT_STATS.has(key)) score += value * 100;
+    else if (key === 'hp') score += value * 0.4;
+    else score += value * 2;
+  }
+  return Math.round(score);
+}
+
+export function gearStatText(key, value) {
+  const label = GEAR_STAT_LABELS[key] || key.toUpperCase();
+  if (PCT_STATS.has(key)) return `${label} +${(value * 100).toFixed(1)}%`;
+  return `${label} +${Math.round(value)}`;
+}
+
+export function gearStatLines(item) {
+  return Object.entries(item?.stats || {}).map(([key, value]) => gearStatText(key, value));
+}
+
+export function scrapValue(item) {
+  const rarity = rarityOf(item);
+  return Math.ceil(8 + (item?.level || 1) * 2.5 + rarity.rank * 14);
+}
+
+export function lootRunCost(state) {
+  const level = Math.max(1, state?.level || 1);
+  const zones = Math.max(1, state?.combat?.unlocked || 1);
+  return Math.ceil(35 + level * 10 + (zones - 1) * 40);
+}
+
+function rollRarity(state, boss = false) {
+  const bonus = Math.min(26,
+    (state?.level || 1) * 0.35
+    + (state?.combat?.unlocked || 1) * 2
+    + (state?.shards || 0) * 0.6
+    + (boss ? 8 : 0));
+  const roll = Math.random() * 100;
+  if (roll < 1 + bonus * 0.12) return RARITIES[4];
+  if (roll < 4 + bonus * 0.32) return RARITIES[3];
+  if (roll < 14 + bonus * 0.8) return RARITIES[2];
+  if (roll < 38 + bonus * 0.4) return RARITIES[1];
+  return RARITIES[0];
+}
+
+function pickSlot() {
+  const roll = Math.random() * 100;
+  if (roll < 28) return 'weapon';
+  if (roll < 49) return 'tool';
+  if (roll < 71) return 'armor';
+  if (roll < 87) return 'helm';
+  return 'charm';
+}
+
+export function makeLootItem(state, opts = {}) {
+  const slotId = opts.slot || pickSlot();
+  const slot = GEAR_SLOT_MAP[slotId];
+  if (!slot) return null;
+  const rarity = opts.rarity ? (RARITY_MAP[opts.rarity] || RARITIES[0]) : rollRarity(state, !!opts.boss);
+  const level = Math.max(1, Math.floor(
+    (state?.level || 1) * 0.8
+    + (state?.combat?.unlocked || 1) * 2
+    + (opts.boss ? 3 : 0)
+    + Math.random() * 2
+  ));
+
+  let classId = null;
+  let baseName;
+  if (slotId === 'weapon') {
+    const weapon = COMBAT_WEAPONS[Math.floor(Math.random() * COMBAT_WEAPONS.length)];
+    classId = weapon.id;
+    baseName = weapon.name;
+  } else if (slotId === 'tool') {
+    const tool = MINING_TOOLS[Math.floor(Math.random() * MINING_TOOLS.length)];
+    classId = tool.id;
+    baseName = tool.name;
+  } else {
+    const names = LOOT_BASE_NAMES[slotId];
+    baseName = names[Math.min(names.length - 1, rarity.rank)];
+  }
+
+  const pool = [...LOOT_AFFIXES[slotId]].sort(() => Math.random() - 0.5).slice(0, rarity.affixes);
+  const scale = (0.75 + Math.min(60, level) * 0.035) * (1 + rarity.rank * 0.12);
+  const stats = {};
+  for (const affix of pool) {
+    const base = affix.min + Math.random() * (affix.max - affix.min);
+    const value = base * scale * (affix.flat ? 1 + level * 0.08 : 1);
+    stats[affix.key] = affix.flat ? Math.max(1, Math.round(value)) : Math.round(value * 1000) / 1000;
+  }
+
+  return {
+    id: `loot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    slot: slotId,
+    rarity: rarity.id,
+    name: `${rarity.prefix} ${baseName}`,
+    level,
+    classId,
+    stats,
+  };
+}
+
+export function sanitizeLootItem(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const slot = GEAR_SLOT_MAP[raw.slot];
+  if (!slot) return null;
+  const rarity = RARITY_MAP[raw.rarity] || RARITIES[0];
+  const stats = {};
+  for (const [key, value] of Object.entries(raw.stats || {})) {
+    if (!(key in GEAR_STAT_LABELS)) continue;
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) stats[key] = n;
+  }
+  if (!Object.keys(stats).length) return null;
+  const classId = (slot.id === 'weapon' && COMBAT_WEAPON_MAP[raw.classId])
+    ? raw.classId
+    : (slot.id === 'tool' && MINING_TOOL_MAP[raw.classId]) ? raw.classId : null;
+  return {
+    id: String(raw.id || `loot_${Math.random().toString(36).slice(2, 9)}`),
+    slot: slot.id,
+    rarity: rarity.id,
+    name: String(raw.name || `${rarity.prefix} ${slot.name}`),
+    level: Math.max(1, Math.floor(Number(raw.level) || 1)),
+    classId,
+    stats,
+  };
+}
+
 export function outfitLevel(state, id) {
   return Math.max(0, Math.floor(Number(state.outfits?.[id]) || 0));
 }
@@ -105,10 +466,10 @@ export function attributeCapsMult(state) {
   return 1 + attrLevel(state, 'luk') * 0.015;
 }
 export function oreMultiplier(state) {
-  return outfitOreMult(state) * attributeOreMult(state) * perkOreMult(state);
+  return outfitOreMult(state) * attributeOreMult(state) * perkOreMult(state) * (1 + (gearStats(state).ore || 0));
 }
 export function xpMultiplier(state) {
-  return outfitXpMult(state) * perkXpMult(state);
+  return outfitXpMult(state) * perkXpMult(state) * (1 + (gearStats(state).xp || 0));
 }
 export function levelHpMult(state) { return 1 + (Math.max(1, state.level || 1) - 1) * 0.04; }
 export function levelAtkMult(state) { return 1 + (Math.max(1, state.level || 1) - 1) * 0.02; }
@@ -208,7 +569,23 @@ export function shardYieldMult(state) { return 1 + (state.shards || 0) * 0.10; }
 export function shardDamageMult(state) { return 1 + (state.shards || 0) * 0.08; }
 export function crewMult(state) { return 1 + (state.crew || 0) * 0.08; }
 
-export function pickPower(state) { return 2 + 2.3 * (state.pickaxe - 1); }
+/* Passive income from working the salvage line. Each drill rig contributes a
+   small cap trickle, modified by the same charm/luck/scavenger bonuses as kills. */
+export function salvageCapsRate(state) {
+  const drills = (state.drills || []).reduce((sum, count) => sum + Math.max(0, Number(count) || 0), 0);
+  return drills * 0.08 * outfitCapsMult(state) * attributeCapsMult(state) * perkCapsMult(state)
+    * (1 + (gearStats(state).caps || 0));
+}
+
+export function pickPower(state) {
+  return (2 + 2.3 * (state.pickaxe - 1))
+    * miningTool(state).powerMult
+    * (1 + (gearStats(state).power || 0));
+}
+
+export function toolCooldown(state) {
+  return Math.max(8, Math.round(miningTool(state).cooldown * (1 - Math.min(0.5, gearStats(state).cooldown || 0))));
+}
 
 export function nodeRichness(node) { return 1 + 0.04 * (node || 0); }
 
@@ -221,6 +598,8 @@ export function strikeYield(state, layerIndex) {
   const layer = LAYERS[layerIndex];
   return layer.baseYield
     * (1 + 0.22 * (state.pickaxe - 1))
+    * miningTool(state).yieldMult
+    * (1 + (gearStats(state).yield || 0))
     * crewMult(state)
     * shardYieldMult(state)
     * oreMultiplier(state)
@@ -298,6 +677,7 @@ export function playerStats(state) {
   const g = state.combat?.gear || state.gear || { weapon: 1, armor: 1, stim: 0 };
   const lvl = Math.max(1, state.level || 1);
   const outfits = state.outfits || {};
+  const gear = gearStats(state);
   const duster = Math.max(0, Math.floor(outfits.duster || 0));
   const rebreather = Math.max(0, Math.floor(outfits.rebreather || 0));
   const charm = Math.max(0, Math.floor(outfits.charm || 0));
@@ -305,21 +685,24 @@ export function playerStats(state) {
   const vit = attrLevel(state, 'vit');
   const agi = attrLevel(state, 'agi');
   const luk = attrLevel(state, 'luk');
-  const baseHp = 100 + 30 * (g.armor - 1) + vit * 8;
+  const baseHp = 100 + 30 * (g.armor - 1) + vit * 8 + (gear.hp || 0);
   const maxHp = Math.max(1, Math.round(
     baseHp
     * levelHpMult(state)
     * (1 + duster * 0.025)
     * perkHpMult(state)
   ));
+  const weapon = combatWeapon(state);
   const attack = (4 + 4 * (g.weapon - 1))
+    * weapon.damageMult
+    * (1 + (gear.damage || 0))
     * levelAtkMult(state)
     * (1 + str * 0.025)
     * shardDamageMult(state)
     * perkAtkMult(state);
-  const crit = Math.min(0.60, 0.12 + rebreather * 0.015 + agi * 0.006 + perkCritBonus(state));
-  const defense = Math.min(0.68, 0.035 * (g.armor - 1) + duster * 0.006 + vit * 0.004);
-  const capsMult = (1 + charm * 0.03) * (1 + luk * 0.015) * perkCapsMult(state);
+  const crit = Math.min(0.60, 0.12 + rebreather * 0.015 + agi * 0.006 + perkCritBonus(state) + weapon.critBonus + (gear.crit || 0));
+  const defense = Math.min(0.68, 0.035 * (g.armor - 1) + duster * 0.006 + vit * 0.004 + (gear.defense || 0));
+  const capsMult = (1 + charm * 0.03) * (1 + luk * 0.015) * perkCapsMult(state) * (1 + (gear.caps || 0));
   return {
     maxHp,
     attack,
@@ -328,16 +711,18 @@ export function playerStats(state) {
     capsMult,
     oreMult: oreMultiplier(state),
     xpMult: xpMultiplier(state),
-    healPerKill: (g.stim > 0 ? 8 + 5 * g.stim : 6) + perkHealBonus(state),
+    healPerKill: (g.stim > 0 ? 8 + 5 * g.stim : 6) + perkHealBonus(state) + (gear.heal || 0),
     deathMs: Math.max(1500, 4000 - 250 * g.stim),
-    speedMult: perkSpeedMult(state),
+    speedMult: perkSpeedMult(state) * (1 + (gear.speed || 0)),
     level: lvl,
   };
 }
 
 export function playerAttackInterval(state) {
   const mult = state ? perkSpeedMult(state) : 1;
-  return Math.max(280, Math.round(750 / mult));
+  const weapon = state ? combatWeapon(state) : COMBAT_WEAPONS[0];
+  const speed = state ? (gearStats(state).speed || 0) : 0;
+  return Math.max(220, Math.round((750 * weapon.speedMult) / (mult * (1 + speed))));
 }
 
 export function makeEnemy(zoneIndex, wave) {

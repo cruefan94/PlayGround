@@ -30,6 +30,7 @@
       <div class="resources" id="resources" aria-label="Resources"></div>
 
       <div class="top-actions">
+        <button class="icon-btn gear-open" id="gearBtn" type="button" data-action="gear" aria-label="Open loadout" title="Loadout &amp; loot">⛨</button>
         <button class="icon-btn" id="soundBtn" type="button" aria-label="Toggle sound" title="Sound">♪</button>
         <button class="icon-btn" id="resetBtn" type="button" aria-label="Reset game" title="Reset game">↺</button>
       </div>
@@ -76,10 +77,13 @@
             <span class="strike-sub" id="strikeSub">+1 SCRAP PER HIT</span>
           </button>
           <div class="mine-meta">
-            <div><span>PICK POWER</span><strong id="pickPower">2.0</strong></div>
+            <div><span>TOOL POWER</span><strong id="pickPower">2.0</strong></div>
             <div><span>AUTO YIELD</span><strong id="autoYield">0.00/s</strong></div>
             <div><span>DEPTH</span><strong id="depthText">12 M</strong></div>
           </div>
+          <button class="toggle-btn mine-auto" id="autoMineBtn" type="button" data-action="automine" aria-pressed="false">
+            <span class="dot"></span><span id="autoMineLabel">AUTO-MINE: OFF</span>
+          </button>
         </div>
         <div class="objective" id="objective">
           <span class="obj-flag">NEXT</span>
@@ -116,11 +120,21 @@
           <p class="section-label">TOOLING</p>
           <div id="toolCards" class="card-list"></div>
 
+          <p class="section-label">MINING TOOLS <span id="toolSummary" class="label-sub">1 / 5 READY</span></p>
+          <div id="miningToolCards" class="card-list equip-list"></div>
+
           <p class="section-label">DRILL RIGS <span id="drillRateTotal" class="label-sub">0.00 ore/s</span></p>
           <div id="drillList" class="drill-list"></div>
 
-          <p class="section-label">LOADOUT</p>
+          <p class="section-label">ARMORY</p>
           <div id="gearCards" class="card-list"></div>
+
+          <p class="section-label">COMBAT WEAPONS <span id="weaponSummary" class="label-sub">1 / 12 READY</span></p>
+          <div id="combatWeaponCards" class="card-list equip-list"></div>
+
+          <p class="section-label">LOADOUT <span id="gearScore" class="label-sub">GEAR 0</span></p>
+          <div class="loadout-strip" id="loadoutStrip"></div>
+          <button class="btn small loot-open-btn" type="button" data-action="gear">OPEN LOADOUT &amp; SALVAGE PACK</button>
 
           <p class="section-label">OUTFITS <span id="outfitSummary" class="label-sub">0 / 3 CRAFTED</span></p>
           <div id="outfitCards" class="card-list"></div>
@@ -183,6 +197,15 @@
             <div><span>DEF</span><strong id="defStat">0%</strong></div>
             <div><span>KILLS</span><strong id="killStat">0</strong></div>
           </div>
+        </div>
+
+        <div class="salvage-bar">
+          <div class="salvage-copy">
+            <span>SALVAGE PACK</span>
+            <strong id="packSummary">0 / 30 · GEAR 0</strong>
+          </div>
+          <button class="btn small" type="button" data-action="gear">LOADOUT</button>
+          <button class="btn small primary" id="salvageRunBtn" type="button" data-action="salvagerun">RUN · <span id="salvageCost">0</span></button>
         </div>
 
         <div class="zone-wrap">

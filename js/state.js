@@ -1,6 +1,7 @@
 import {
-  SAVE_KEY, VERSION, LAYERS, ZONES, ORE_ORDER,
-  makeEnemy, playerStats, drillRate, layerMaxHp, fmt,
+  SAVE_KEY, VERSION, LAYERS, ZONES, ORE_ORDER, MINING_TOOLS, COMBAT_WEAPONS,
+  GEAR_SLOTS, MAX_INVENTORY, sanitizeLootItem,
+  makeEnemy, playerStats, drillRate, salvageCapsRate, layerMaxHp, fmt,
 } from './data.js';
 
 export function defaultState() {
@@ -23,6 +24,12 @@ export function defaultState() {
     attributes: { str: 0, vit: 0, agi: 0, luk: 0 },
     perks: {},
     outfits: { rebreather: 0, duster: 0, charm: 0 },
+    tools: { pick: true },
+    weapons: { pipeaxe: true },
+    equippedTool: 'pick',
+    equippedWeapon: 'pipeaxe',
+    inventory: [],
+    loadout: { weapon: null, tool: null, armor: null, helm: null, charm: null },
     combat: {
       zone: 0,
       unlocked: 1,
@@ -36,9 +43,10 @@ export function defaultState() {
       primeKills: 0,
     },
     stats: {
-      totalMined: 0, totalCaps: 0, clicks: 0, kills: 0,
+      totalMined: 0, totalCaps: 0, clicks: 0, kills: 0, deaths: 0,
       detonations: 0, startedAt: Date.now(),
     },
+    autoMine: false,
     sound: true,
     lastSeen: Date.now(),
   };
@@ -73,6 +81,36 @@ function mergeState(raw) {
     charm: Math.max(0, Math.min(15, Math.floor(Number(raw.outfits?.charm) || 0))),
   };
 
+  base.tools = { pick: true };
+  for (const tool of MINING_TOOLS) {
+    if (tool.id === 'pick' || raw.tools?.[tool.id] === true) base.tools[tool.id] = true;
+  }
+  base.weapons = { pipeaxe: true };
+  for (const weapon of COMBAT_WEAPONS) {
+    if (weapon.id === 'pipeaxe' || raw.weapons?.[weapon.id] === true) base.weapons[weapon.id] = true;
+  }
+  base.equippedTool = base.tools[raw.equippedTool] ? raw.equippedTool : 'pick';
+  base.equippedWeapon = base.weapons[raw.equippedWeapon] ? raw.equippedWeapon : 'pipeaxe';
+
+  base.inventory = [];
+  const seen = new Set();
+  if (Array.isArray(raw.inventory)) {
+    for (const entry of raw.inventory) {
+      if (base.inventory.length >= MAX_INVENTORY) break;
+      const item = sanitizeLootItem(entry);
+      if (!item || seen.has(item.id)) continue;
+      seen.add(item.id);
+      base.inventory.push(item);
+    }
+  }
+  base.loadout = { weapon: null, tool: null, armor: null, helm: null, charm: null };
+  for (const slot of GEAR_SLOTS) {
+    const id = raw.loadout?.[slot.id];
+    if (typeof id === 'string' && base.inventory.some((item) => item.id === id && item.slot === slot.id)) {
+      base.loadout[slot.id] = id;
+    }
+  }
+
   base.layersUnlocked = Math.min(LAYERS.length, Math.max(1, Math.floor(Number(raw.layersUnlocked) || 1)));
   base.layer = Math.min(base.layersUnlocked - 1, Math.max(0, Math.floor(Number(raw.layer) || 0)));
   if (Array.isArray(raw.drills)) base.drills = base.drills.map((_, i) => Math.max(0, Math.floor(Number(raw.drills[i]) || 0)));
@@ -103,7 +141,9 @@ function mergeState(raw) {
   base.stats.totalCaps = Math.max(0, Number(base.stats.totalCaps) || 0);
   base.stats.clicks = Math.max(0, Math.floor(Number(base.stats.clicks) || 0));
   base.stats.kills = Math.max(0, Math.floor(Number(base.stats.kills) || 0));
+  base.stats.deaths = Math.max(0, Math.floor(Number(base.stats.deaths) || 0));
   base.stats.detonations = Math.max(0, Math.floor(Number(base.stats.detonations) || 0));
+  base.autoMine = raw.autoMine === true;
   base.sound = raw.sound !== false;
   base.lastSeen = Number(raw.lastSeen) || Date.now();
   base.version = VERSION;
@@ -149,11 +189,17 @@ export function offlineReport(state, now = Date.now()) {
     state.stats.totalMined += amount;
     total += amount;
   });
+  const capRate = salvageCapsRate(state);
+  const caps = capRate > 0 ? capRate * elapsed * 0.5 : 0;
+  if (caps > 0) {
+    state.caps += caps;
+    state.stats.totalCaps = (state.stats.totalCaps || 0) + caps;
+  }
   const stats = playerStats(state);
   state.combat.hp = Math.min(stats.maxHp, state.combat.hp + stats.maxHp * 0.01 * elapsed);
   if (state.combat.deadUntil < now) state.combat.deadUntil = 0;
-  if (total <= 0) return null;
-  return { seconds: elapsed, gains, total };
+  if (total <= 0 && caps <= 0) return null;
+  return { seconds: elapsed, gains, total, caps };
 }
 
 export function resetProgress(state) {
@@ -161,6 +207,7 @@ export function resetProgress(state) {
   // Prestige wipes the run, but the survivor's RPG progression and outfits persist.
   fresh.shards = state.shards;
   fresh.sound = state.sound;
+  fresh.autoMine = !!state.autoMine;
   fresh.stats.startedAt = state.stats.startedAt;
   fresh.level = state.level;
   fresh.xp = state.xp;
@@ -169,6 +216,14 @@ export function resetProgress(state) {
   fresh.attributes = { ...state.attributes };
   fresh.perks = { ...state.perks };
   fresh.outfits = { ...state.outfits };
+  // Schematics are knowledge, not hardware: unlocked tools and weapons survive.
+  fresh.tools = { ...state.tools };
+  fresh.weapons = { ...state.weapons };
+  fresh.equippedTool = state.equippedTool;
+  fresh.equippedWeapon = state.equippedWeapon;
+  // Salvage and fitted gear are physical, but the survivor keeps their pack.
+  fresh.inventory = (state.inventory || []).map((item) => ({ ...item, stats: { ...item.stats } }));
+  fresh.loadout = { ...state.loadout };
   fresh.combat.hp = playerStats(fresh).maxHp;
   return fresh;
 }
