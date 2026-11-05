@@ -172,6 +172,37 @@ export const COMBAT_WEAPONS = [
 
 export const COMBAT_WEAPON_MAP = Object.fromEntries(COMBAT_WEAPONS.map((w) => [w.id, w]));
 
+/* ── class ladder (drives gear pricing) ───────────────────── */
+/* Every weapon/tool class earns a pricing rank 0–5 derived from its
+   unlock cost: starter salvage is dirt cheap, anomaly-grade is dear.
+   Armor, helm and charm have no class ladder — rank 0, priced by rarity. */
+function costRank(unlock) {
+  if (!unlock) return 0;
+  const caps = unlock.caps || 0;
+  if (caps <= 100) return 1;
+  if (caps <= 900) return 2;
+  if (caps <= 2500) return 3;
+  if (caps <= 7000) return 4;
+  return 5;
+}
+export const CLASS_RANK_MAP = {};
+for (const tool of MINING_TOOLS) CLASS_RANK_MAP[tool.id] = costRank(tool.unlock);
+for (const weapon of COMBAT_WEAPONS) CLASS_RANK_MAP[weapon.id] = costRank(weapon.unlock);
+
+export function classTierRank(item) {
+  return CLASS_RANK_MAP[item?.classId] ?? 0;
+}
+
+/* Human tier label for a class ('HEAVY', 'ANOMALY', …), or '' when
+   the item has no class ladder (armor/helm/charm). */
+const CLASS_TIER_MAP = Object.fromEntries([
+  ...MINING_TOOLS.map((t) => [t.id, t.tier]),
+  ...COMBAT_WEAPONS.map((w) => [w.id, w.tier]),
+]);
+export function tierLabel(classId) {
+  return CLASS_TIER_MAP[classId] || '';
+}
+
 export function miningTool(state) {
   const loot = equippedItem(state, 'tool');
   return MINING_TOOL_MAP[loot?.classId] || MINING_TOOL_MAP[state?.equippedTool] || MINING_TOOLS[0];
@@ -294,9 +325,12 @@ export function gearStatLines(item) {
   return Object.entries(item?.stats || {}).map(([key, value]) => gearStatText(key, value));
 }
 
+/* Scrap payout in coins. Climbs with rarity, item level and class rank —
+   scrapping a Void Railgun pays far better than a Scrap Pistol. */
 export function scrapValue(item) {
   const rarity = rarityOf(item);
-  return Math.ceil((8 + (item?.level || 1) * 2.5 + rarity.rank * 14) * (item?.unique ? 3 : 1));
+  const rank = classTierRank(item);
+  return Math.ceil((8 + (item?.level || 1) * 2.5 + rarity.rank * 14) * (1 + rank * 0.3) * (item?.unique ? 3 : 1));
 }
 
 export function lootRunCost(state) {
@@ -599,11 +633,14 @@ export const CHEST_MAP = Object.fromEntries(CHESTS.map((c) => [c.id, c]));
 export const STORE_REROLL_COST = 3;
 export const STORE_STOCK_SIZE = 3;
 
-/* Isotope price of a gear offer. Uniques read as premium. */
+/* Isotope price of a gear offer. Rarity sets the floor, item level nudges
+   it, and the class ladder does the heavy lifting: common-class salvage
+   starts near 2 ISO while anomaly-grade runs 5× that. Uniques stay premium. */
 export function isoValue(item) {
   const rarity = rarityOf(item);
-  const base = 2 + rarity.rank * 2.5 + (item?.level || 1) * 0.12;
-  return Math.max(1, Math.ceil(base * (item?.unique ? 2.2 : 1)));
+  const rank = classTierRank(item);
+  const base = 2 + rarity.rank * 2.5 + (item?.level || 1) * 0.12 + rank * 2.5;
+  return Math.max(1, Math.ceil(base * (item?.unique ? 1.7 : 1)));
 }
 
 /* ── contracts (one-time isotope bounties) ────────────────── */

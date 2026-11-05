@@ -1871,6 +1871,25 @@ svg { display: block; }
 .offer-card { position: relative; }
 .offer-card.has-unique .lc-name { color: #ffe9c9; text-shadow: 0 0 8px rgba(255, 177, 92, .5); }
 
+/* class-tier chip: starter gray → anomaly cyan */
+.lc-tier {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 6.5px;
+  letter-spacing: .12em;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  vertical-align: 1px;
+}
+.lc-tier.rank-0 { color: #8d947f; }
+.lc-tier.rank-1 { color: #9aa8b2; }
+.lc-tier.rank-2 { color: #7fdc6a; }
+.lc-tier.rank-3 { color: #e88a3c; }
+.lc-tier.rank-4 { color: #6fd8dc; }
+.lc-tier.rank-5 { color: #6fd8dc; text-shadow: 0 0 6px rgba(111, 216, 220, .6); }
+
 .store-reroll {
   display: flex;
   align-items: center;
