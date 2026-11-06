@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101510" />
+  <title>LAST PATROL — Field Command</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" id="brandHome" aria-label="Return to command"><span class="brand-mark">LP</span><span class="brand-name">LAST<span> PATROL</span></span></button>
+      <div class="top-center"><span class="season-dot"></span><span>REPUBLIC OF VIETNAM</span><i></i><span>FIELD COMMAND · 1969</span></div>
+      <div class="top-right"><span class="rank-badge" id="rankBadge">RANK 01</span><span class="currency"><span class="currency-symbol">$</span><b id="currency">420</b><small>SCRATCH</small></span><button class="icon-btn" id="soundBtn" aria-label="Toggle sound">♫</button></div>
+    </header>
+    <main>
+      <section id="baseScreen" class="base-screen">
+        <div class="hero-panel">
+          <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> FIELD HQ <span class="eyebrow-line"></span> <span id="dateLabel">JUL 14, 1969</span></div>
+            <h1>THE JUNGLE<br><span>DOESN’T</span> WAIT.</h1>
+            <p>Assemble your patrol. Make every round count.<br>Bring your people home.</p>
+            <button class="primary-btn" id="deployBtn"><span>DEPLOY PATROL</span><b>↗</b></button>
+            <div class="hero-foot"><span class="mini-seal">✳</span> <span>OPERATION <b id="operationName">IRON CANOPY</b></span><span class="hero-foot-spacer"></span><span id="missionProgress">01 / 03</span></div>
+          </div>
+          <div class="hero-art" aria-label="Illustration of a jungle patrol at dusk">
+            <div class="sun-haze"></div><div class="ridge ridge-back"></div><div class="ridge ridge-front"></div><div class="mist mist-one"></div><div class="mist mist-two"></div>
+            <div class="tree tree-a"></div><div class="tree tree-b"></div><div class="tree tree-c"></div><div class="tree tree-d"></div>
+            <div class="patrol-silhouette"><span></span><span></span><span></span></div>
+            <div class="art-caption"><span>16° 02' N</span><i></i><span>JUNGLE LOWLANDS</span></div>
+            <div class="art-stamp">FIELD<br>REPORT<br><b>69</b></div>
+          </div>
+        </div>
+        <div class="base-grid">
+          <section class="panel squad-panel"><div class="panel-head"><div><div class="eyebrow">YOUR PEOPLE</div><h2>THE PATROL <span id="squadCount">03</span></h2></div><button class="text-btn" data-screen="squadScreen">MANAGE SQUAD <b>↗</b></button></div><div class="squad-strip" id="squadStrip"></div></section>
+          <section class="panel readiness-panel"><div class="panel-head"><div><div class="eyebrow">READY CHECK</div><h2>BEFORE YOU GO</h2></div><span class="ready-tag"><i></i> OPERATIONAL</span></div><div class="readiness-row"><span class="readiness-icon">⌖</span><div><b id="unitName">U.S. ARMY</b><small>UNIT AFFILIATION</small></div><button class="tiny-edit" data-screen="loadoutScreen" aria-label="Edit unit">↗</button></div><div class="readiness-row"><span class="readiness-icon">▤</span><div><b id="loadoutSummary">M16A1 · M-1955</b><small>COMMANDER LOADOUT</small></div><button class="tiny-edit" data-screen="loadoutScreen" aria-label="Edit loadout">↗</button></div><div class="readiness-footer"><span><b id="winsStat">0</b> MISSIONS CLEARED</span><span><b id="killsStat">0</b> HOSTILE CONTACTS</span></div></section>
+          <section class="panel ops-panel"><div class="panel-head"><div><div class="eyebrow">AREA OF OPERATIONS</div><h2>CAMPAIGN ROUTE</h2></div><span class="map-coord">RVN / 69</span></div><div class="route-list" id="routeList"></div></section>
+          <section class="panel intel-panel"><span class="intel-mark">✳</span><div><div class="eyebrow">FIELD NOTE 04</div><p>“Slow is smooth. Smooth is fast.<br>Keep the squad in sight.”</p><small>— PATROL HANDBOOK, 1969</small></div></section>
+        </div>
+        <footer class="base-footer"><span>LAST PATROL <i>•</i> A TACTICAL FIELD JOURNAL</span><span>NO ONE LEFT BEHIND.</span></footer>
+      </section>
+
+      <section id="battleScreen" class="battle-screen hidden">
+        <div class="battle-heading"><button class="back-btn" id="returnBase">← <span>FIELD HQ</span></button><div class="battle-title"><div class="eyebrow"><span class="live-dot"></span> ACTIVE OPERATION</div><h1 id="battleMissionTitle">IRON CANOPY</h1></div><div class="battle-meta"><span id="battleFaction">U.S. ARMY</span><i></i><span id="turnLabel">YOUR TURN · 01</span></div></div>
+        <div class="battle-layout">
+          <section class="map-panel"><div class="map-topline"><div><span class="map-tag">AO / <b id="mapSector">A-01</b></span><span class="map-weather">☁ OVERCAST · VISIBILITY 4</span></div><span id="objectiveLabel" class="objective-label">OBJECTIVE: CLEAR THE AREA</span></div>
+            <div class="map-legend"><span><i class="legend-you"></i> PATROL</span><span><i class="legend-enemy"></i> HOSTILE</span><span><i class="legend-cover"></i> HARD COVER</span><span id="remainingLabel">CONTACTS 04</span></div>
+            <div id="battleMap" class="battle-map" role="grid" aria-label="Tactical battle map"></div>
+            <div class="map-toast" id="mapToast"></div>
+            <div class="map-foot"><span>CLICK A SOLDIER TO SELECT</span><span>MOVE <b>2 TILES</b> · ENGAGE <b>4 TILES</b></span></div>
+          </section>
+          <aside class="command-panel">
+            <div class="command-top"><div><div class="eyebrow">PATROL ROSTER</div><h2>ON THE GROUND <span id="aliveCount">03</span></h2></div><button class="end-turn-btn" id="endTurnBtn">END TURN <b>↗</b></button></div>
+            <div class="unit-list" id="unitList"></div>
+            <div class="selected-card" id="selectedCard"></div>
+            <div class="action-area"><div class="action-label">COMMAND <span id="actionHint">SELECT A SOLDIER</span></div><div class="action-buttons"><button class="action-btn" id="moveBtn" disabled><span>↗</span> MOVE</button><button class="action-btn fire-btn" id="fireBtn" disabled><span>◎</span> FIRE</button><button class="action-btn hold-btn" id="holdBtn" disabled><span>⌑</span> HOLD</button></div></div>
+            <div class="combat-log"><div class="log-head"><span>FIELD RADIO</span><span>● LIVE</span></div><div id="logEntries" class="log-entries"></div></div>
+          </aside>
+        </div>
+        <div class="battle-bottom"><span><i class="live-dot"></i> OPERATION IN PROGRESS</span><span>THE JUNGLE DOESN’T FORGIVE CARELESSNESS.</span></div>
+      </section>
+
+      <section id="loadoutScreen" class="subscreen hidden">
+        <div class="subscreen-head"><button class="back-btn" data-screen="baseScreen">← <span>FIELD HQ</span></button><div><div class="eyebrow">PERSONAL KIT · CUSTOMIZATION</div><h1>LOADOUT <span>ROOM</span></h1></div><div class="kit-credit"><small>AVAILABLE SCRATCH</small><b>$<span class="currency-value">420</span></b></div></div>
+        <div class="tab-row"><button class="tab active" data-tab="weapons">WEAPONS <span id="weaponCount">01</span></button><button class="tab" data-tab="armor">ARMOR <span id="armorCount">01</span></button><button class="tab" data-tab="faction">UNIT AFFILIATION</button></div>
+        <div id="loadoutContent" class="loadout-content"></div>
+      </section>
+
+      <section id="squadScreen" class="subscreen hidden">
+        <div class="subscreen-head"><button class="back-btn" data-screen="baseScreen">← <span>FIELD HQ</span></button><div><div class="eyebrow">YOUR PEOPLE · RECRUITMENT</div><h1>THE <span>ROSTER</span></h1></div><div class="kit-credit"><small>AVAILABLE SCRATCH</small><b>$<span class="currency-value">420</span></b></div></div>
+        <div class="squad-page-grid"><section class="panel squad-manage"><div class="panel-head"><div><div class="eyebrow">ACTIVE PATROL</div><h2>ASSIGNED PERSONNEL</h2></div><span class="ready-tag"><i></i> <span id="squadLimit">03 / 05</span> SLOTS</span></div><div id="rosterList" class="roster-list"></div></section><section class="panel recruit-panel"><div class="panel-head"><div><div class="eyebrow">AVAILABLE FOR DUTY</div><h2>RECRUIT A SPECIALIST</h2></div></div><div id="recruitList" class="recruit-list"></div></section></div>
+      </section>
+    </main>
+    <div id="resultModal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card"><div class="result-icon" id="resultIcon">✳</div><div class="eyebrow" id="resultEyebrow">OPERATION COMPLETE</div><h2 id="resultTitle">AREA CLEARED</h2><p id="resultCopy">Your patrol has secured the area.</p><div class="reward-line" id="rewardLine"></div><button class="primary-btn" id="resultButton"><span>RETURN TO FIELD HQ</span><b>↗</b></button></div></div>
+    <div id="toast" class="global-toast"></div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
