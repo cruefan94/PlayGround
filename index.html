@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -50,7 +51,7 @@
             <div class="map-legend"><span><i class="legend-you"></i> PATROL</span><span><i class="legend-enemy"></i> HOSTILE</span><span><i class="legend-cover"></i> HARD COVER</span><span id="remainingLabel">CONTACTS 04</span></div>
             <div id="battleMap" class="battle-map" role="grid" aria-label="Tactical battle map"></div>
             <div class="map-toast" id="mapToast"></div>
-            <div class="map-foot"><span>CLICK A SOLDIER TO SELECT</span><span>MOVE <b>2 TILES</b> · ENGAGE <b>4 TILES</b></span></div>
+            <div class="map-foot"><span>CLICK A SOLDIER TO SELECT</span><span>MOVE <b>2 TILES</b> · ENGAGE <b id="rangeLabel">4 TILES</b></span></div>
           </section>
           <aside class="command-panel">
             <div class="command-top"><div><div class="eyebrow">PATROL ROSTER</div><h2>ON THE GROUND <span id="aliveCount">03</span></h2></div><button class="end-turn-btn" id="endTurnBtn">END TURN <b>↗</b></button></div>
