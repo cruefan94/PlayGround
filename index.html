@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101611" />
+  <title>Firebase 67 — The Long Watch</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="game-shell" aria-label="Firebase 67 game">
+    <canvas id="game" aria-label="Top-down jungle defense game"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">F</span><div><strong>FIREBASE 67</strong><small>THE LONG WATCH · CENTRAL HIGHLANDS, 1967</small></div></div>
+      <div class="mission-tag"><i></i><span id="mission-label">PATROL SECTOR · 01</span></div>
+      <button id="pause-button" class="icon-button" aria-label="Pause game" title="Pause">Ⅱ</button>
+    </header>
+    <section class="hud-left" aria-live="polite">
+      <div class="hud-label">SECTOR <strong id="sector">01</strong></div>
+      <div class="objective"><span class="objective-icon">⌖</span><div><b id="objective-title">Hold the perimeter</b><small id="objective-copy">Clear the tree line. Keep the radio online.</small></div></div>
+      <div class="status-row"><span>PERIMETER</span><div class="meter"><i id="base-health"></i></div><b id="base-health-text">100%</b></div>
+      <div class="status-row"><span>VITALS</span><div class="meter health"><i id="player-health"></i></div><b id="player-health-text">100%</b></div>
+      <div class="wave-line"><span class="pulse"></span><span id="wave-status">AREA QUIET</span></div>
+    </section>
+    <section class="hud-right">
+      <div class="mini-map-wrap"><div class="mini-map-title"><span>AO / QUANG TRI</span><span>● LIVE</span></div><canvas id="minimap" width="148" height="112"></canvas></div>
+      <div class="field-note"><span class="note-icon">✳</span><div><b>FIELD NOTE</b><p id="field-note-text">Stay mobile. The tree line hides more than you think.</p></div></div>
+    </section>
+    <footer class="bottom-hud">
+      <div class="weapon-card">
+        <div class="weapon-art" id="weapon-art" aria-hidden="true"></div>
+        <div class="weapon-info"><small>PRIMARY · <span id="weapon-type">RIFLE</span></small><strong id="weapon-name">M16A1</strong><span id="weapon-desc">5.56×45mm · SELECT-FIRE</span></div>
+        <div class="ammo"><strong id="ammo-count">20</strong><span>/ <i id="reserve-count">140</i></span><small>ROUND COUNT</small></div>
+      </div>
+      <div class="controls-hint"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE</span><span><kbd>CLICK</kbd> FIRE</span><span><kbd>R</kbd> RELOAD</span><span><kbd>1</kbd>–<kbd>4</kbd> ARMORY</span></div>
+    </footer>
+    <div id="toast" class="toast" role="status"></div>
+    <div id="overlay" class="overlay">
+      <div class="overlay-card">
+        <div class="eyebrow"><span></span> 1ST CAVALRY DIVISION · FIELD OPERATIONS</div>
+        <h1 id="overlay-title">THE LONG<br><em>WATCH.</em></h1>
+        <p id="overlay-copy">Night settles over the highlands. Hold Firebase 67 until the extraction chopper comes through.</p>
+        <div class="briefing">
+          <div><small>MISSION</small><b>Perimeter defense</b></div><div><small>LOCATION</small><b>Ia Drang Valley</b></div><div><small>OPERATION</small><b>3 sectors</b></div>
+        </div>
+        <button id="start-button" class="start-button"><span>BEGIN PATROL</span><b>→</b></button>
+        <div class="overlay-foot">WASD TO MOVE <span>·</span> MOUSE TO AIM <span>·</span> SURVIVE THE NIGHT</div>
+      </div>
+      <div class="overlay-stamp">FIELD<br>REPORT<br><b>67—A</b></div>
+    </div>
+    <div id="touch-controls" aria-label="Touch controls">
+      <div id="joystick" class="joystick"><div class="joy-knob"></div><span>MOVE</span></div>
+      <button id="touch-fire" class="touch-fire">FIRE</button>
+      <button id="touch-reload" class="touch-reload">↻</button>
+    </div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
